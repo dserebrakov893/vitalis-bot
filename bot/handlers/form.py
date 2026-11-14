@@ -87,7 +87,7 @@ async def ask(bot: Bot, chat_id: int, state: FSMContext, step: State) -> None:
             reply_markup=kb.consent_pdn_kb(), disable_web_page_preview=True,
         )
     elif name == "news":
-        await bot.send_message(chat_id, t.CONSENT_NEWSLETTER, reply_markup=kb.consent_news_kb())
+        await bot.send_message(chat_id, t.consent_news_html(), reply_markup=kb.consent_news_kb())
 
 
 async def _go_back(bot: Bot, chat_id: int, state: FSMContext, step: str, sm, delivery) -> None:
@@ -129,13 +129,13 @@ async def on_contact(message: Message, bot: Bot, state: FSMContext) -> None:
         await message.answer(t.BAD_PHONE, reply_markup=kb.phone_kb())
         return
     await state.update_data(phone=normalize_phone(message.contact.phone_number))
-    await message.answer("Номер сохранили.", reply_markup=kb.main_kb())
+    await message.answer(t.PHONE_SAVED, reply_markup=kb.main_kb())
     await ask(bot, message.chat.id, state, Form.email)
 
 
 @router.message(Form.phone, F.text == t.BTN_BACK)
 async def on_phone_back(message: Message, bot: Bot, state: FSMContext) -> None:
-    await message.answer("Хорошо, вернёмся на шаг назад.", reply_markup=kb.main_kb())
+    await message.answer(t.PHONE_BACK, reply_markup=kb.main_kb())
     await ask(bot, message.chat.id, state, Form.full_name)
 
 
@@ -166,7 +166,7 @@ async def on_university_other(message: Message, bot: Bot, state: FSMContext) -> 
 
 @router.message(StateFilter(Form.full_name, Form.email, Form.university_other))
 async def on_text_expected(message: Message, state: FSMContext) -> None:
-    await message.answer("Пришли ответ текстом.")
+    await message.answer(t.TEXT_EXPECTED)
 
 
 @router.message(StateFilter(Form.university, Form.status, Form.interests, Form.pdn, Form.news))
@@ -263,7 +263,7 @@ async def _finish(bot: Bot, call: CallbackQuery, state: FSMContext, sm: async_se
     required = ("event_id", "full_name", "phone", "email", "university", "status", "age_group")
     if any(not data.get(k) for k in required) or not data.get("interests"):
         log.warning("incomplete form for user %s", call.from_user.id)
-        await bot.send_message(call.message.chat.id, "Что-то пошло не так. Нажми /start и заполни анкету ещё раз.")
+        await bot.send_message(call.message.chat.id, t.FORM_BROKEN)
         return
     profile = regs.Profile(
         full_name=data["full_name"],

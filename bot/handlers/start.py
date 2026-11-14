@@ -26,6 +26,18 @@ async def _prefer_widgets(state: FSMContext) -> bool:
     return not (await state.get_data()).get("fallback", False)
 
 
+async def _install_keyboard(message: Message) -> None:
+    """Первый вход (или после /delete_me): ставим клавиатуру внизу без лишнего сообщения в чате.
+
+    У карточки уже есть inline-кнопка «Иду», а у сообщения может быть только одна клавиатура. Поэтому
+    клавиатуру ставит служебное сообщение, которое сразу удаляется: клавиатура остаётся у клиента."""
+    try:
+        msg = await message.answer("⌨️", reply_markup=kb.main_kb(), disable_notification=True)
+        await message.bot.delete_message(message.chat.id, msg.message_id)
+    except Exception as e:  # noqa: BLE001 — клавиатура не критична
+        log.warning("cannot install bottom keyboard for user %s: %r", message.from_user.id, e)
+
+
 async def open_bot(message: Message, state: FSMContext, sm: async_sessionmaker, delivery: Delivery,
                    source: str | None, prefer_widgets: bool) -> None:
     user = message.from_user
@@ -34,8 +46,7 @@ async def open_bot(message: Message, state: FSMContext, sm: async_sessionmaker, 
     await state.clear()
     await state.update_data(source=src, fallback=not prefer_widgets, kb=True)
     if not old.get("kb"):
-        # первый вход (или после /delete_me): ставим постоянную клавиатуру внизу
-        await message.answer(t.WELCOME, reply_markup=kb.main_kb())
+        await _install_keyboard(message)
     async with sm() as s, s.begin():
         await regs.touch_user(s, user.id, user.username, user.first_name, source)
     async with sm() as s:
@@ -146,17 +157,17 @@ async def cb_go(call: CallbackQuery, bot: Bot, state: FSMContext, sm: async_sess
 # ---------- постоянная клавиатура внизу ----------
 # Обработчики в этом роутере, а он подключён раньше анкеты: кнопка работает на любом шаге.
 
-@router.message(F.text == t.MENU_EVENT)
+@router.message(F.text.in_(t.MENU_EVENT_ALIASES))
 async def menu_event(message: Message, state: FSMContext, sm: async_sessionmaker, delivery: Delivery) -> None:
     await open_bot(message, state, sm, delivery, None, prefer_widgets=await _prefer_widgets(state))
 
 
-@router.message(F.text == t.MENU_TICKET)
+@router.message(F.text.in_(t.MENU_TICKET_ALIASES))
 async def menu_ticket(message: Message, state: FSMContext, sm: async_sessionmaker, delivery: Delivery) -> None:
     await cmd_ticket(message, state, sm, delivery)
 
 
-@router.message(F.text == t.MENU_CANCEL)
+@router.message(F.text.in_(t.MENU_CANCEL_ALIASES))
 async def menu_cancel(message: Message, sm: async_sessionmaker) -> None:
     from bot.handlers.user_commands import ask_cancel
 

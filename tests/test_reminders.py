@@ -51,12 +51,12 @@ async def test_each_stage_exactly_once(renv, sessionmaker):
 
     assert await rem.tick(T - 23 * H) == {"reminded_24h": 2}
     texts = [m["text"] for m in _msgs(session)]
-    assert len(texts) == 2 and all("Напоминаем" in x and "Зубовский бульвар" in x for x in texts)
+    assert len(texts) == 2 and all("Завтра встреча клуба Vitalis" in x and "Зубовский бульвар" in x for x in texts)
     assert await rem.tick(T - 22 * H) == {}  # второй раз не уходит
 
     session.reset()
     assert await rem.tick(T - 1 * H) == {"reminded_2h": 2}
-    assert all(m["text"].startswith("Начинаем через 2 часа") for m in _msgs(session))
+    assert all(m["text"].startswith("<b>Начинаем через 2 часа") for m in _msgs(session))
     assert _statuses(session) == ["soon", "soon"]
 
     session.reset()

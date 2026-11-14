@@ -20,8 +20,8 @@ from sqlalchemy.orm import selectinload
 
 from bot import keyboards as kb
 from bot.db.models import Event, Registration
-from bot.formatting import fmt_datetime, fmt_time
-from bot.services.delivery import SEND_DELAY, Delivery
+from bot.formatting import fmt_time
+from bot.services.delivery import SEND_DELAY, Delivery, event_details
 from bot.services.registration import utcnow
 
 log = logging.getLogger(__name__)
@@ -47,22 +47,30 @@ STAGES = (
 
 
 def text_24h(event: Event) -> str:
-    lines = [
-        f"Напоминаем: встреча клуба Vitalis {escape(fmt_datetime(event.starts_at))} (МСК).",
-        f"Спикер: {escape(event.speaker)}.",
-    ]
-    if event.venue_text:
-        lines.append(f"Место: {escape(event.venue_text)}")
-    lines.append("\nЕсли планы поменялись, нажми «Не смогу прийти»: место уйдёт тому, кто в листе ожидания.")
-    return "\n".join(lines)
+    return "\n".join(
+        [
+            "<b>Завтра встреча клуба Vitalis</b>",
+            "",
+            escape(event.title),
+            *event_details(event),
+            "",
+            "Если планы поменялись, нажми «Не смогу прийти»: место уйдёт тому, кто в листе ожидания.",
+        ]
+    )
 
 
 def text_2h(event: Event) -> str:
-    venue = f"\nАдрес: {escape(event.venue_text)}" if event.venue_text else ""
-    return f"Начинаем через 2 часа, в {fmt_time(event.starts_at)}.{venue}\nБилет всегда под рукой: /ticket"
+    lines = [f"<b>Начинаем через 2 часа, в {fmt_time(event.starts_at)}</b>"]
+    if event.venue_text:
+        lines += ["", f"<b>Где:</b> {escape(event.venue_text)}"]
+    lines += ["", "Билет всегда под рукой: кнопка «Мой билет» внизу."]
+    return "\n".join(lines)
 
 
-FEEDBACK_TEXT = "Спасибо, что был на встрече Vitalis! Оцени её от 1 до 5, это поможет сделать следующие лучше."
+FEEDBACK_TEXT = (
+    "<b>Спасибо, что пришёл на встречу!</b>\n\n"
+    "Оцени её от 1 до 5. Так мы поймём, что сделать лучше в следующий раз."
+)
 RATED_TEXT = "Спасибо за оценку!"
 
 

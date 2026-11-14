@@ -23,37 +23,47 @@ SEND_DELAY = 0.035  # лимит Telegram ~30 сообщений в секунд
 
 
 def event_heading(event: Event) -> str:
+    """Короткая подпись для подписей виджетов и календаря."""
     title = event.title[:1].lower() + event.title[1:] if event.title else ""
     return f"Vitalis · {title}"
 
 
-def event_card_text(event: Event, left: int) -> str:
-    lines = [
-        f"<b>{escape(event_heading(event))}</b>",
-        escape(fmt_datetime(event.starts_at)),
-    ]
+def event_details(event: Event) -> list[str]:
+    """Когда / Где / Спикер: одинаково в карточке, билете и напоминаниях."""
+    when = f"{fmt_weekday(event.starts_at)}, {fmt_datetime(event.starts_at)} (МСК)"
+    lines = [f"<b>Когда:</b> {escape(when)}"]
     if event.venue_text:
-        lines.append(escape(event.venue_text))
-    lines.append(f"Спикер: {escape(event.speaker)}")
-    lines.append(f"Осталось мест: {left}" if left > 0 else "Мест нет, запишем в лист ожидания")
-    return "\n".join(lines)
+        lines.append(f"<b>Где:</b> {escape(event.venue_text)}")
+    lines.append(f"<b>Спикер:</b> {escape(event.speaker)}")
+    return lines
 
 
-def ticket_status_text(reg: Registration) -> str:
-    return {"registered": "ты в списке", "waitlist": "лист ожидания", "cancelled": "отменён"}[reg.state]
+def event_card_text(event: Event, left: int) -> str:
+    seats = f"Осталось мест: {left}" if left > 0 else "Мест нет, но можно встать в лист ожидания"
+    return "\n".join(
+        [f"<b>{escape(event.title)}</b>", "<i>Бизнес-клуб Vitalis</i>", "", *event_details(event), "", seats]
+    )
+
+
+TICKET_STATUS = {
+    "registered": "Ты в списке. На входе покажи QR-код из PDF-билета.",
+    "waitlist": "Ты в листе ожидания.",
+    "cancelled": "Билет аннулирован.",
+}
 
 
 def ticket_text(user: User, event: Event, reg: Registration) -> str:
-    lines = [
-        f"<b>Vitalis · билет №{reg.ticket_no}</b>",
-        escape(user.full_name or user.tg_first_name or ""),
-        f"{escape(event.title)} · {fmt_weekday(event.starts_at)}, {escape(fmt_datetime(event.starts_at))} (МСК)",
-    ]
-    if event.venue_text:
-        lines.append(f"Место: {escape(event.venue_text)}")
-    lines.append(f"Спикер: {escape(event.speaker)}")
-    lines.append(f"Статус: {ticket_status_text(reg)}")
-    return "\n".join(lines)
+    return "\n".join(
+        [
+            f"<b>Твой билет №{reg.ticket_no}</b>",
+            escape(user.full_name or user.tg_first_name or ""),
+            "",
+            escape(event.title),
+            *event_details(event),
+            "",
+            TICKET_STATUS[reg.state],
+        ]
+    )
 
 
 async def safe_call(coro_factory, *, what: str, user_id: int):
