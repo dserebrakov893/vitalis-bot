@@ -98,7 +98,7 @@ async def test_guard_list_sorted(aenv, sessionmaker):
     await send(text_update(ADMIN, "/list"))
     out = session.last_text()
     body = out.split("\n")[1:]
-    assert out.startswith("Встреча #1") and "Всего: 4" in out
+    assert out.startswith("Встреча с Семёном Покацким") and "Всего: 4" in out
     order = [line.split(". ", 1)[1].split(" — ")[0] for line in body]
     assert order == ["=HYPERLINK(1) Злой", "Елисеев Егор", "Ёлкина Анна", "Яковлев Ян"]
     assert "Борисов" not in out  # отменённых нет

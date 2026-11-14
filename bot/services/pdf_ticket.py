@@ -82,7 +82,7 @@ def render_ticket_pdf(user: User, event: Event, reg: Registration, secret: str |
         y -= 10.5
     y -= 2
     c.setFillColor(MUTED)
-    for line in simpleSplit(f"{event.title} · спикер: {event.speaker}", "DejaVu", 8, text_w)[:2]:
+    for line in simpleSplit(f"Спикер: {event.speaker}", "DejaVu", 8, text_w)[:4]:
         c.drawString(margin, y, line)
         y -= 10.5
 

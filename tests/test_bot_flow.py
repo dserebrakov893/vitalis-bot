@@ -46,7 +46,6 @@ async def fill_form(send, session, uid=UID):
     await send(callback_update(uid, "f:status:student"))
     await send(callback_update(uid, "f:interests:medtech"))
     await send(callback_update(uid, "f:interests:done"))
-    await send(callback_update(uid, "f:project:idea"))
     await send(callback_update(uid, "f:pdn:adult"))
     assert session.last_text() == t.CONSENT_NEWSLETTER
 
@@ -55,7 +54,7 @@ async def test_full_registration_flow(env, sessionmaker):
     bot, session, send, _ = env
     await send(text_update(UID, "/start test"))
     card = session.last_text()
-    assert "Vitalis · встреча #1" in card and "19 ноября, 17:00" in card and "Осталось мест: 75" in card
+    assert "Vitalis · встреча с Семёном Покацким" in card and "Покацкий" in card and "19 ноября, 17:00" in card and "Осталось мест: 75" in card
 
     await send(callback_update(UID, "go:1"))
     assert session.last_text() == t.ASK_FULL_NAME
@@ -93,10 +92,9 @@ async def test_full_registration_flow(env, sessionmaker):
     await send(callback_update(UID, "f:interests:pharma_biotech"))
     await send(callback_update(UID, "f:interests:medtech"))  # снять галочку
     await send(callback_update(UID, "f:interests:done"))
-    await send(callback_update(UID, "f:project:back"))  # назад к интересам
+    await send(callback_update(UID, "f:pdn:back"))  # назад к интересам
     assert session.last_text() == t.ASK_INTERESTS
     await send(callback_update(UID, "f:interests:done"))
-    await send(callback_update(UID, "f:project:running"))
     await send(callback_update(UID, "f:pdn:17_with_parent"))
     session.reset()
     await send(callback_update(UID, "f:news:no"))
@@ -119,7 +117,7 @@ async def test_full_registration_flow(env, sessionmaker):
         fsm = await s.execute(select(__import__("bot.db.models", fromlist=["FsmState"]).FsmState.data))
     assert user.source == "test" and reg.source == "test"
     assert user.university == "Казанский ГМУ" and user.interests == ["pharma_biotech"]
-    assert user.project_stage == "running" and user.age_group == "17_with_parent"
+    assert user.project_stage is None and user.age_group == "17_with_parent"
     assert user.email == "ivan@mail.ru" and user.phone == "+79990000000"
     assert user.newsletter_opt_in is False and consents == ["pdn"]
     # после регистрации в FSM нет ПДн

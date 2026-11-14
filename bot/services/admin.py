@@ -56,7 +56,6 @@ async def stats_text(sm: async_sessionmaker, event_id: int | None = None) -> str
     unis = Counter(u.university for _, u in active)
     statuses = Counter(u.status for _, u in active)
     interests = Counter(i for _, u in active for i in (u.interests or []))
-    projects = Counter(u.project_stage for _, u in active)
     news = sum(1 for _, u in active if u.newsletter_opt_in)
     minors = sum(1 for _, u in active if u.age_group == "17_with_parent")
     scores = [r.feedback_score for r, _ in rows if r.feedback_score]
@@ -75,7 +74,6 @@ async def stats_text(sm: async_sessionmaker, event_id: int | None = None) -> str
         "\n<b>Вузы</b>", _top(unis),
         "\n<b>Статусы</b>", _top(statuses, STATUS_LABELS),
         "\n<b>Интересы</b>", _top(interests, INTEREST_LABELS),
-        "\n<b>Свой проект</b>", _top(projects, PROJECT_LABELS),
     ]
     from html import escape
 

@@ -36,7 +36,7 @@ class Profile:
     university: str
     status: str
     interests: list[str]
-    project_stage: str
+    project_stage: str | None
     age_group: str
     newsletter_opt_in: bool
 

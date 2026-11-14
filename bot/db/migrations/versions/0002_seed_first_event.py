@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from alembic import op
 
-from bot.db.seed_data import TITLE, VENUE_TEXT, VENUE_URL
+from bot.db.seed_data import SPEAKER, TITLE, VENUE_TEXT, VENUE_URL
 
 revision = "0002"
 down_revision = "0001"
@@ -33,7 +33,7 @@ def upgrade() -> None:
         [
             {
                 "title": TITLE,
-                "speaker": "со-основатель Rapid Bio",
+                "speaker": SPEAKER,
                 # 17:00 МСК = 14:00 UTC
                 "starts_at": datetime(2026, 11, 19, 14, 0, tzinfo=timezone.utc),
                 "venue_text": VENUE_TEXT,
@@ -46,4 +46,4 @@ def upgrade() -> None:
     )
 
 def downgrade() -> None:
-    op.execute(sa.text("DELETE FROM events WHERE title = :t").bindparams(t=TITLE))
+    op.execute(sa.text("DELETE FROM events WHERE id = 1"))

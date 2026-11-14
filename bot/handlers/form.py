@@ -38,7 +38,6 @@ class Form(StatesGroup):
     university_other = State()
     status = State()
     interests = State()
-    project = State()
     pdn = State()
     news = State()
 
@@ -51,14 +50,12 @@ PREV = {
     "university_other": "university",
     "status": "university",
     "interests": "status",
-    "project": "interests",
-    "pdn": "project",
+    "pdn": "interests",
     "news": "pdn",
 }
 UNI_LABELS = dict(t.UNIVERSITIES)
 STATUS_CODES = {code for code, _ in t.STATUSES}
 INTEREST_CODES = [code for code, _ in t.INTERESTS]
-PROJECT_CODES = {code for code, _ in t.PROJECT_STAGES}
 
 
 async def ask(bot: Bot, chat_id: int, state: FSMContext, step: State) -> None:
@@ -82,8 +79,6 @@ async def ask(bot: Bot, chat_id: int, state: FSMContext, step: State) -> None:
         await bot.send_message(chat_id, t.ASK_STATUS, reply_markup=kb.options_kb(name, t.STATUSES, columns=2))
     elif name == "interests":
         await bot.send_message(chat_id, t.ASK_INTERESTS, reply_markup=kb.interests_kb(data.get("interests", [])))
-    elif name == "project":
-        await bot.send_message(chat_id, t.ASK_PROJECT, reply_markup=kb.options_kb(name, t.PROJECT_STAGES))
     elif name == "pdn":
         if not settings.privacy_policy_url:
             log.warning("PRIVACY_POLICY_URL is empty: consent is shown without a link")
@@ -174,7 +169,7 @@ async def on_text_expected(message: Message, state: FSMContext) -> None:
     await message.answer("Пришли ответ текстом.")
 
 
-@router.message(StateFilter(Form.university, Form.status, Form.interests, Form.project, Form.pdn, Form.news))
+@router.message(StateFilter(Form.university, Form.status, Form.interests, Form.pdn, Form.news))
 async def on_buttons_expected(message: Message) -> None:
     await message.answer(t.USE_BUTTONS)
 
@@ -232,7 +227,7 @@ async def on_form_button(call: CallbackQuery, bot: Bot, state: FSMContext, sm: a
                 return
             await call.answer()
             await close_kb()
-            await ask(bot, chat_id, state, Form.project)
+            await ask(bot, chat_id, state, Form.pdn)
             return
         if value in INTEREST_CODES:
             selected = [c for c in INTEREST_CODES if (c in selected) != (c == value)]
@@ -242,13 +237,6 @@ async def on_form_button(call: CallbackQuery, bot: Bot, state: FSMContext, sm: a
                 await call.message.edit_reply_markup(reply_markup=kb.interests_kb(selected))
             except Exception:  # noqa: BLE001
                 pass
-        return
-
-    if step == "project" and value in PROJECT_CODES:
-        await call.answer()
-        await close_kb()
-        await state.update_data(project_stage=value)
-        await ask(bot, chat_id, state, Form.pdn)
         return
 
     if step == "pdn" and value in ("adult", "17_with_parent"):
@@ -272,7 +260,7 @@ async def _finish(bot: Bot, call: CallbackQuery, state: FSMContext, sm: async_se
     data = await state.get_data()
     # Сразу выходим из анкеты: повторный тап по кнопке уже не пройдёт проверку шага
     await state.set_state(None)
-    required = ("event_id", "full_name", "phone", "email", "university", "status", "project_stage", "age_group")
+    required = ("event_id", "full_name", "phone", "email", "university", "status", "age_group")
     if any(not data.get(k) for k in required) or not data.get("interests"):
         log.warning("incomplete form for user %s", call.from_user.id)
         await bot.send_message(call.message.chat.id, "Что-то пошло не так. Нажми /start и заполни анкету ещё раз.")
@@ -284,7 +272,7 @@ async def _finish(bot: Bot, call: CallbackQuery, state: FSMContext, sm: async_se
         university=data["university"],
         status=data["status"],
         interests=data["interests"],
-        project_stage=data["project_stage"],
+        project_stage=None,  # шаг убран из анкеты 14.11.2026, колонка остаётся
         age_group=data["age_group"],
         newsletter_opt_in=newsletter,
     )
