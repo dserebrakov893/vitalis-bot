@@ -1,0 +1,23 @@
+[project]
+name = "vitalis-bot"
+version = "0.1.0"
+description = "Telegram-бот регистрации бизнес-клуба Vitalis"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "aiogram>=3.31,<4",
+    "sqlalchemy[asyncio]>=2.0.40,<2.1",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "reportlab>=4.2",
+    "qrcode[pil]>=8.0",
+    "aiosmtplib>=3.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "pgserver>=0.1.4"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
