@@ -5,7 +5,9 @@ import os
 from alembic import context
 
 from bot.config import Settings
-from bot.db.engine import make_engine
+from sqlalchemy import text
+
+from bot.db.engine import SCHEMA, make_engine
 from bot.db.models import Base
 
 target_metadata = Base.metadata
@@ -23,9 +25,19 @@ def _url_and_cert() -> tuple[str, str]:
 
 
 def _do_run(connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    # Своя схема: не задеваем чужие таблицы в public, если база общая
+    connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{SCHEMA}"'))
+    connection.commit()
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
+        version_table_schema=SCHEMA,
+    )
     with context.begin_transaction():
         context.run_migrations()
+    if connection.in_transaction():
+        connection.commit()
 
 
 async def _run_async() -> None:

@@ -13,6 +13,9 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 ROOT = Path(__file__).resolve().parents[2]
+# Все таблицы бота живут в своей схеме: база может быть общей с другими сервисами,
+# а pg_dump -n vitalis переносит ровно данные бота.
+SCHEMA = "vitalis"
 
 
 def build_async_url(database_url: str) -> tuple[str, str | None]:
@@ -47,7 +50,7 @@ def make_engine(database_url: str, root_cert: str = "") -> AsyncEngine:
         # кэш подготовленных выражений asyncpg ломается, поэтому выключаем его на любом провайдере.
         "statement_cache_size": 0,
         "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
-        "server_settings": {"timezone": "UTC"},
+        "server_settings": {"timezone": "UTC", "search_path": SCHEMA},
     }
     ssl_arg = build_ssl(root_cert, sslmode)
     if ssl_arg is not None:
