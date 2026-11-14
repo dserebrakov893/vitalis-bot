@@ -26,6 +26,8 @@ from bot.services.validation import (
 
 log = logging.getLogger(__name__)
 router = Router(name="form")
+# Команды (/cancel, /about, …) во время анкеты не считаем ответом на шаг
+router.message.filter(~F.text.startswith("/"))
 
 
 class Form(StatesGroup):

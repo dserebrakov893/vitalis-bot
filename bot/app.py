@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from bot import texts as t
 from bot.db.fsm_storage import PgStorage
-from bot.handlers import form, start, user_commands
+from bot.handlers import admin, form, start, user_commands
 from bot.handlers.widget_queries import WidgetQueryMiddleware
 from bot.services.delivery import Delivery
 
@@ -28,6 +28,7 @@ def build_dispatcher(sm: async_sessionmaker, delivery: Delivery, extra_routers=(
         dp.include_router(r)
     dp.include_router(start.router)
     dp.include_router(form.router)
+    dp.include_router(admin.router)
     dp.include_router(user_commands.router)  # последним: в нём «ловушка» для прочих сообщений
 
     @dp.errors()

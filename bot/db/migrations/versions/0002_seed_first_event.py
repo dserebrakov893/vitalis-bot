@@ -5,23 +5,16 @@ Revises: 0001
 Create Date: 2026-11-14
 """
 from datetime import datetime, timezone
-from urllib.parse import quote
 
 import sqlalchemy as sa
 from alembic import op
+
+from bot.db.seed_data import TITLE, VENUE_TEXT, VENUE_URL
 
 revision = "0002"
 down_revision = "0001"
 branch_labels = None
 depends_on = None
-
-TITLE = "Встреча #1"
-VENUE_TEXT = (
-    "Совместный цифровой кампус «Школы 21» и Сеченовского университета, "
-    "Москва, Зубовский бульвар, д. 37, стр. 1, м. «Парк культуры»"
-)
-VENUE_URL = "https://yandex.ru/maps/?text=" + quote("Москва, Зубовский бульвар, 37с1")
-
 
 def upgrade() -> None:
     events = sa.table(
@@ -51,7 +44,6 @@ def upgrade() -> None:
             }
         ],
     )
-
 
 def downgrade() -> None:
     op.execute(sa.text("DELETE FROM events WHERE title = :t").bindparams(t=TITLE))
