@@ -12,6 +12,7 @@ from bot.app import ALLOWED_UPDATES, build_dispatcher, setup_bot_profile
 from bot.config import settings
 from bot.db.engine import make_engine, make_sessionmaker
 from bot.services.delivery import Delivery
+from bot.services.pdf_ticket import render_ticket_pdf
 
 
 def _setup_logging() -> None:
@@ -26,7 +27,7 @@ async def main() -> None:
     engine = make_engine(settings.database_url, settings.pg_ssl_root_cert)
     sm = make_sessionmaker(engine)
     bot = Bot(settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    delivery = Delivery(bot, sm)
+    delivery = Delivery(bot, sm, pdf_renderer=render_ticket_pdf)
     dp = build_dispatcher(sm, delivery)
     await setup_bot_profile(bot)
     try:
