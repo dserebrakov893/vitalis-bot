@@ -63,6 +63,7 @@ def event_card_html(event: Event) -> str:
                 "venue": escape(event.venue_text or ""),
                 "speaker": escape(event.speaker),
                 "ts": str(int(event.starts_at.timestamp() * 1000)),
+                "eid": str(event.id),
             },
         )
     )

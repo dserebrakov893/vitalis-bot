@@ -40,7 +40,8 @@ class WidgetService:
         self.bot = bot
         self.sm = sm
         self.enabled = enabled
-        self.autoflush = autoflush  # в тестах выключаем фоновую задачу и зовём flush_cards() руками
+        self.autoflush = autoflush
+        self.shared_allowed = True  # сбрасывается, если Telegram отказал в shared-виджете  # в тестах выключаем фоновую задачу и зовём flush_cards() руками
         self._card_lock = asyncio.Lock()
         self._dirty: set[int] = set()
         self._flusher: asyncio.Task | None = None
@@ -50,44 +51,66 @@ class WidgetService:
     async def send_event_card(self, chat_id: int, event: Event, left: int) -> bool:
         caption = render.card_caption(event, left)
         try:
-            if event.shared_widget_id:
-                await self.bot(SendSharedWidget(chat_id=chat_id, widget_id=event.shared_widget_id, caption=caption))
-                return True
-            async with self._card_lock:
-                async with self.sm() as s:
-                    fresh = await s.get(Event, event.id)
-                if fresh.shared_widget_id:
-                    await self.bot(SendSharedWidget(chat_id=chat_id, widget_id=fresh.shared_widget_id, caption=caption))
+            if self.shared_allowed:
+                try:
+                    await self._send_shared_card(chat_id, event, left, caption)
                     return True
-                # Отдельного метода создания нет: shared-виджет создаёт первая отправка с is_shared
-                msg = await self.bot(
-                    SendWidget(
-                        chat_id=chat_id,
-                        html=render.event_card_html(event),
-                        public_data=render.card_public_data(left, event.is_open),
-                        caption=caption,
-                        allow_queries=True,
-                        is_shared=True,
-                    )
+                except TelegramBadRequest as e:
+                    if "NOT_ALLOWED" not in str(e).upper():
+                        raise
+                    # Telegram может не пускать shared-виджеты в прод: дальше шлём обычные карточки,
+                    # а живой счётчик мест карточка берёт фоновыми запросами "seats:<id>"
+                    self.shared_allowed = False
+                    log.warning("shared widgets are not allowed (%r), switching to static event cards", e)
+            await self.bot(
+                SendWidget(
+                    chat_id=chat_id,
+                    html=render.event_card_html(event),
+                    public_data=render.card_public_data(left, event.is_open),
+                    caption=caption,
+                    allow_queries=True,
                 )
-                widget_id = (widget_of(msg) or {}).get("id")
-                if widget_id:
-                    async with self.sm() as s, s.begin():
-                        await s.execute(
-                            update(Event)
-                            .where(Event.id == event.id, Event.shared_widget_id.is_(None))
-                            .values(shared_widget_id=str(widget_id))
-                        )
-                    log.info("created shared card widget %s for event %s", widget_id, event.id)
-                    await self._edit_card(str(widget_id), left, event.is_open, cache_time=CARD_CACHE_TIME)
-                else:
-                    log.warning("sendWidget returned no widget id for event %s", event.id)
+            )
             return True
         except TelegramForbiddenError:
             return True  # бот заблокирован: fallback тоже не дойдёт
         except Exception as e:  # noqa: BLE001
             log.warning("event card widget failed for user %s, sending fallback: %r", chat_id, e)
             return False
+
+    async def _send_shared_card(self, chat_id: int, event: Event, left: int, caption: str) -> None:
+        if event.shared_widget_id:
+            await self.bot(SendSharedWidget(chat_id=chat_id, widget_id=event.shared_widget_id, caption=caption))
+            return
+        async with self._card_lock:
+            async with self.sm() as s:
+                fresh = await s.get(Event, event.id)
+            if fresh.shared_widget_id:
+                await self.bot(SendSharedWidget(chat_id=chat_id, widget_id=fresh.shared_widget_id, caption=caption))
+                return
+            # Отдельного метода создания нет: shared-виджет создаёт первая отправка с is_shared
+            msg = await self.bot(
+                SendWidget(
+                    chat_id=chat_id,
+                    html=render.event_card_html(event),
+                    public_data=render.card_public_data(left, event.is_open),
+                    caption=caption,
+                    allow_queries=True,
+                    is_shared=True,
+                )
+            )
+            widget_id = (widget_of(msg) or {}).get("id")
+            if widget_id:
+                async with self.sm() as s, s.begin():
+                    await s.execute(
+                        update(Event)
+                        .where(Event.id == event.id, Event.shared_widget_id.is_(None))
+                        .values(shared_widget_id=str(widget_id))
+                    )
+                log.info("created shared card widget %s for event %s", widget_id, event.id)
+                await self._edit_card(str(widget_id), left, event.is_open, cache_time=CARD_CACHE_TIME)
+            else:
+                log.warning("sendWidget returned no widget id for event %s", event.id)
 
     async def _edit_card(self, widget_id: str, left: int, is_open: bool, cache_time: int | None = None) -> None:
         try:
@@ -218,10 +241,14 @@ class WidgetService:
             # кошелёк, группы и пересланные копии не поддерживаем
             await self.answer(qid, '{"e":"unsupported"}')
             return
+        if data.startswith("seats:"):
+            # фоновый запрос карточки: живой счётчик мест без shared-виджета
+            await self.answer(qid, await self._seats_state(data[6:], query.get("widget_id")))
+            return
         log.info("widget query user=%s data=%s", user_id, data[:16])
 
-        if data == "reg":
-            event_id = await self._event_by_widget(query.get("widget_id"))
+        if data == "reg" or data.startswith("reg:"):
+            event_id = await self._event_by_widget(query.get("widget_id"), data[4:])
             await self.answer(qid, '{"ok":1}' if event_id else '{"e":"closed"}')
             if event_id:
                 await on_register(chat["id"], user_id, event_id)
@@ -247,8 +274,21 @@ class WidgetService:
 
         await self.answer(qid, '{"e":"unknown"}')
 
-    async def _event_by_widget(self, widget_id) -> int | None:
+    async def _seats_state(self, event_arg: str, widget_id) -> str:
+        event_id = await self._event_by_widget(widget_id, event_arg)
         async with self.sm() as s:
+            event = await s.get(Event, event_id) if event_id else None
+            if event is None:
+                return render.card_public_data(0, False)
+            left = await regs.seats_left(s, event)
+        return render.card_public_data(left, event.is_open and event.starts_at > regs.utcnow())
+
+    async def _event_by_widget(self, widget_id, event_arg: str = "") -> int | None:
+        async with self.sm() as s:
+            if event_arg.isdigit():
+                ev = await s.get(Event, int(event_arg))
+                if ev is not None:
+                    return ev.id
             if widget_id:
                 ev = (
                     await s.execute(select(Event).where(Event.shared_widget_id == str(widget_id)))

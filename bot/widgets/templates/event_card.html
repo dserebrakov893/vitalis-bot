@@ -20,8 +20,10 @@ button{width:100%}
 <p class=m id=s></p>
 <script>
 var W=window.TelegramWidget,T={{ts}},R=-1,D={},$=function(i){return document.getElementById(i)},E={NOT_ALLOWED:"Нажми /reg",BUSY:"Секунду…",RATE_LIMITED:"Слишком часто, попробуй через пару секунд",TIMEOUT:"Бот не ответил, нажми /reg",FAILED:"Не получилось, нажми /reg"};
-function rd(){try{var d=JSON.parse(W.publicData);if(d&&d.r>=R){R=d.r;D=d}}catch(e){}draw()}
+function ap(t){try{var d=JSON.parse(t);if(d&&d.r>=R){R=d.r;D=d}}catch(e){}draw()}
+function rd(){ap(W.publicData)}
+function sy(){W.request("seats:{{eid}}").then(function(a){ap(a.result)},function(){})}
 function draw(){var n=Date.now(),cl=n>=T||D.o===0,l=D.l;$("l").textContent=cl?"—":(l==null?"…":l);$("lt").textContent=!cl&&l===0?"лист ожидания":"мест осталось";var x=Math.max(0,T-n),d=Math.floor(x/864e5),h=Math.floor(x%864e5/36e5),m=Math.floor(x%36e5/6e4);$("c").textContent=x?(d?d+" д "+h+" ч":h+" ч "+(m<10?"0":"")+m+" м"):"идёт";var g=$("g");g.disabled=cl;g.textContent=cl?"Регистрация закрыта":l===0?"Встать в лист ожидания":"Иду"}
-$("g").onclick=function(){$("s").textContent="Открываю анкету…";W.request("reg").then(function(){$("s").textContent="Анкета ниже в чате"},function(e){$("s").textContent=E[e.code]||E.FAILED})};
-if(W){W.onEvent("publicDataChanged",rd);W.watchPublicData();rd();setInterval(draw,3e4);W.ready()}
+$("g").onclick=function(){$("s").textContent="Открываю анкету…";W.request("reg:{{eid}}").then(function(){$("s").textContent="Анкета ниже в чате"},function(e){$("s").textContent=E[e.code]||E.FAILED})};
+if(W){W.onEvent("publicDataChanged",rd);W.onEvent("activated",sy);W.watchPublicData();rd();sy();setInterval(function(){if(W.isActive)sy();draw()},3e4);W.ready()}
 </script>

@@ -106,7 +106,7 @@ def test_card_widget_js():
                               ["public", json.dumps({"r": 5, "l": 0, "o": 1})]])
     first, clicked, stale, full = res["snaps"]
     assert first["l"]["t"] == "12" and first["g"]["t"] == "Иду" and first["c"]["t"].startswith("2 д")
-    assert res["watched"] and res["requests"] == ["reg"] and clicked["s"]["t"] == "Анкета ниже в чате"
+    assert res["watched"] and res["requests"] == ["seats:1", "reg:1"] and clicked["s"]["t"] == "Анкета ниже в чате"
     assert stale["l"]["t"] == "12"  # старая ревизия игнорируется
     assert full["l"]["t"] == "0" and full["g"]["t"] == "Встать в лист ожидания"
 
@@ -224,6 +224,38 @@ async def test_widget_flow(wenv, sessionmaker):
     await send(callback_update(UID, "cx:yes:1"))
     edits = session.params("EditMessageWidgetData")
     assert edits[0]["message_id"] == reg.ticket_widget_msg_id and json.loads(edits[0]["chat_data"])["s"] == "cancelled"
+
+
+async def test_static_card_when_shared_not_allowed(wenv, sessionmaker):
+    """Прод может не пускать shared-виджеты: тогда обычная карточка-виджет, счётчик по запросу seats."""
+    from aiogram.exceptions import TelegramBadRequest
+
+    session, send, widgets = wenv
+    real = session.make_request
+
+    async def no_shared(bot, method, timeout=None):
+        if type(method).__name__ == "SendWidget" and method.is_shared:
+            session.calls.append(("SendWidget", method.model_dump(exclude_none=True)))
+            raise TelegramBadRequest(method=method, message="Bad Request: INPUT_MEDIA_WIDGET_NOT_ALLOWED")
+        return await real(bot, method, timeout)
+
+    session.make_request = no_shared
+    await send(text_update(UID, "/start"))
+    sent = session.params("SendWidget")
+    assert [bool(p.get("is_shared")) for p in sent] == [True, False]  # попытка shared, затем обычный
+    assert sent[1]["allow_queries"] and json.loads(sent[1]["public_data"])["l"] == 75
+    assert not any("Осталось мест" in x for x in session.texts())  # текстовый fallback не понадобился
+    assert widgets.shared_allowed is False
+
+    session.reset()
+    await send(text_update(UID + 1, "/start"))  # второй раз shared уже не пробуем
+    assert [bool(p.get("is_shared")) for p in session.params("SendWidget")] == [False]
+
+    session.reset()
+    await send(widget_query(UID, "seats:1", qid="s1"))
+    assert json.loads(session.params("AnswerWidgetQuery")[0]["data"])["l"] == 75
+    await send(widget_query(UID, "reg:1", qid="s2"))
+    assert session.last_text() == t.ASK_FULL_NAME
 
 
 async def test_rating_from_widget(wenv, sessionmaker):
