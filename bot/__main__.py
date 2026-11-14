@@ -13,6 +13,7 @@ from bot.config import settings
 from bot.db.engine import make_engine, make_sessionmaker
 from bot.services.delivery import Delivery
 from bot.services.pdf_ticket import render_ticket_pdf
+from bot.widgets.service import WidgetService
 
 
 def _setup_logging() -> None:
@@ -27,7 +28,9 @@ async def main() -> None:
     engine = make_engine(settings.database_url, settings.pg_ssl_root_cert)
     sm = make_sessionmaker(engine)
     bot = Bot(settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    delivery = Delivery(bot, sm, pdf_renderer=render_ticket_pdf)
+    widgets = WidgetService(bot, sm, enabled=settings.widgets_enabled)
+    delivery = Delivery(bot, sm, widgets=widgets, pdf_renderer=render_ticket_pdf)
+    logging.getLogger(__name__).info("widgets enabled: %s", settings.widgets_enabled)
     dp = build_dispatcher(sm, delivery)
     await setup_bot_profile(bot)
     try:

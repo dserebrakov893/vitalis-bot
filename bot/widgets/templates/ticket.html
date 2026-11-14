@@ -1,0 +1,34 @@
+<style>
+body{margin:0;padding:12px 14px 10px}
+.k{display:flex;justify-content:space-between;font-size:.72em;letter-spacing:.12em;text-transform:uppercase;color:var(--tg-theme-accent-text-color);font-weight:600}
+h3{margin:6px 0 4px;user-select:text;-webkit-user-select:text}
+p{margin:2px 0}
+.m{color:var(--tg-theme-hint-color);font-size:.88em}
+#st{margin:10px 0;padding:8px 10px;border-radius:12px;background:var(--tg-theme-secondary-bg-color);font-weight:600;text-align:center}
+.x{color:var(--tg-theme-destructive-text-color)}
+.r{display:flex;gap:6px;margin-top:6px}
+.r button{flex:1}
+#rt{display:flex;justify-content:center;gap:4px;margin-top:6px}
+#rt button{flex:none;width:44px;font-size:1.25em;padding:4px 0}
+.f{text-align:center;font-size:.68em;color:var(--tg-theme-hint-color);margin-top:10px}
+</style>
+<div class=k><span>Vitalis · билет</span><span id=no></span></div>
+<h3 id=n></h3>
+<p><b>{{when}}</b></p>
+<p class=m>{{venue}}</p>
+<p class=m>Спикер: {{speaker}}</p>
+<div id=st></div>
+<div id=rt></div>
+<div class=r><button id=cal>В календарь</button><button id=cx class=x>Не смогу прийти</button></div>
+<p class=m id=s style="text-align:center"></p>
+<div class=f>билет сделан JBD</div>
+<script>
+var W=window.TelegramWidget,R=-1,D={},$=function(i){return document.getElementById(i)},S={registered:"Ты в списке",soon:"Начинаем через 2 часа",live:"Мы начали, заходи",done:"Оцени встречу",cancelled:"Билет аннулирован"},E={NOT_ALLOWED:"Нажми /ticket",BUSY:"Секунду…",RATE_LIMITED:"Слишком часто, попробуй позже",TIMEOUT:"Бот не ответил, попробуй ещё раз",FAILED:"Не получилось, попробуй ещё раз"};
+function rd(){try{var d=JSON.parse(W.chatData);if(d&&d.r>=R){R=d.r;D=d}}catch(e){}draw()}
+function err(e){$("s").textContent=E[e.code]||E.FAILED}
+function draw(){var s=D.s||"registered",a=s=="registered"||s=="soon";$("no").textContent=D.no?"№ "+D.no:"";$("n").textContent=D.n||"";$("st").textContent=S[s]||"";$("st").className=s=="cancelled"?"x":"";$("cal").hidden=!a;$("cx").hidden=!a;var t=$("rt");t.innerHTML="";if(s=="done"){for(var i=1;i<6;i++){var b=document.createElement("button");b.textContent=i<=(D.sc||0)?"★":"☆";b.onclick=rate(i);t.appendChild(b)}if(D.sc)$("s").textContent="Спасибо за оценку!"}}
+function rate(i){return function(){$("s").textContent="Отправляю…";W.request("rate:"+i).then(function(){D.sc=i;draw()},err)}}
+$("cal").onclick=function(){W.openLink({{cal}})};
+$("cx").onclick=function(){$("s").textContent="…";W.request("cancel").then(function(){$("s").textContent="Подтверди отмену в чате"},err)};
+if(W){W.onEvent("chatDataChanged",rd);rd();W.ready()}
+</script>

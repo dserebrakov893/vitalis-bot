@@ -18,7 +18,8 @@ class FakeSession(BaseSession):
         super().__init__()
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self._ids = itertools.count(1000)
-        self.raw_calls: list[tuple[str, dict[str, Any]]] = []
+        self.fail: set[str] = set()  # имена методов, которые должны упасть с ошибкой Telegram
+        self._widgets = itertools.count(1)
 
     async def close(self) -> None:
         return None
@@ -30,14 +31,25 @@ class FakeSession(BaseSession):
         name = type(method).__name__
         params = method.model_dump(exclude_none=True)
         self.calls.append((name, params))
+        if name in self.fail:
+            from aiogram.exceptions import TelegramBadRequest
+
+            raise TelegramBadRequest(method=method, message="Bad Request: WIDGET_TEST_FAILURE")
         returning = getattr(method, "__returning__", None)
         if returning is Message:
             chat_id = params.get("chat_id", 0)
+            extra = {}
+            if name == "SendWidget":
+                widget = {"html": params["html"]}
+                if params.get("is_shared"):
+                    widget["id"] = f"9000{next(self._widgets)}"
+                extra["widget"] = widget
             return Message(
                 message_id=next(self._ids),
                 date=int(time.time()),
                 chat=Chat(id=chat_id, type="private"),
                 text=params.get("text"),
+                **extra,
             )
         if name == "GetMe":
             return User(id=BOT_ID, is_bot=True, first_name="Vitalis", username="vitalis_business_club_bot")
@@ -49,6 +61,9 @@ class FakeSession(BaseSession):
 
     def last_text(self) -> str:
         return self.texts()[-1]
+
+    def params(self, method: str) -> list[dict[str, Any]]:
+        return [p for n, p in self.calls if n == method]
 
     def names(self) -> list[str]:
         return [n for n, _ in self.calls]

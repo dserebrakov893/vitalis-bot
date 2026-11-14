@@ -1,0 +1,27 @@
+<style>
+body{margin:0;padding:12px 14px 12px}
+.k{font-size:.72em;letter-spacing:.12em;text-transform:uppercase;color:var(--tg-theme-accent-text-color);font-weight:600}
+h3{margin:4px 0 6px}
+p{margin:2px 0}
+.m{color:var(--tg-theme-hint-color);font-size:.88em}
+.r{display:flex;gap:8px;margin:12px 0}
+.b{flex:1;background:var(--tg-theme-secondary-bg-color);border-radius:12px;padding:8px 4px;text-align:center;font-size:.8em;color:var(--tg-theme-hint-color)}
+.b b{display:block;font-size:1.55em;color:var(--tg-theme-text-color);font-variant-numeric:tabular-nums}
+button{width:100%}
+#s{text-align:center;margin-top:6px}
+</style>
+<div class=k>Vitalis · бизнес-клуб</div>
+<h3>{{title}}</h3>
+<p><b>{{when}}</b></p>
+<p class=m>{{venue}}</p>
+<p class=m>Спикер: {{speaker}}</p>
+<div class=r><div class=b><b id=l>…</b><span id=lt>мест осталось</span></div><div class=b><b id=c>…</b>до начала</div></div>
+<button id=g>Иду</button>
+<p class=m id=s></p>
+<script>
+var W=window.TelegramWidget,T={{ts}},R=-1,D={},$=function(i){return document.getElementById(i)},E={NOT_ALLOWED:"Нажми /reg",BUSY:"Секунду…",RATE_LIMITED:"Слишком часто, попробуй через пару секунд",TIMEOUT:"Бот не ответил, нажми /reg",FAILED:"Не получилось, нажми /reg"};
+function rd(){try{var d=JSON.parse(W.publicData);if(d&&d.r>=R){R=d.r;D=d}}catch(e){}draw()}
+function draw(){var n=Date.now(),cl=n>=T||D.o===0,l=D.l;$("l").textContent=cl?"—":(l==null?"…":l);$("lt").textContent=!cl&&l===0?"лист ожидания":"мест осталось";var x=Math.max(0,T-n),d=Math.floor(x/864e5),h=Math.floor(x%864e5/36e5),m=Math.floor(x%36e5/6e4);$("c").textContent=x?(d?d+" д "+h+" ч":h+" ч "+(m<10?"0":"")+m+" м"):"идёт";var g=$("g");g.disabled=cl;g.textContent=cl?"Регистрация закрыта":l===0?"Встать в лист ожидания":"Иду"}
+$("g").onclick=function(){$("s").textContent="Открываю анкету…";W.request("reg").then(function(){$("s").textContent="Анкета ниже в чате"},function(e){$("s").textContent=E[e.code]||E.FAILED})};
+if(W){W.onEvent("publicDataChanged",rd);W.watchPublicData();rd();setInterval(draw,3e4);W.ready()}
+</script>
