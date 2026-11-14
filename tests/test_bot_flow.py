@@ -196,59 +196,47 @@ async def test_club_and_about_are_disabled(env):
 
 async def test_bottom_keyboard(env, sessionmaker):
     _, session, send, _ = env
-    await send(text_update(UID, "/start"))
-    service = session.params("SendMessage")[0]
-    kb = [[b["text"] for b in row] for row in service["reply_markup"]["keyboard"]]
-    assert kb == [[t.MENU_EVENT, t.MENU_TICKET], [t.MENU_CANCEL]]
-    assert service["reply_markup"]["is_persistent"]
-    assert session.names()[:2] == ["SendMessage", "DeleteMessage"]  # служебное сообщение сразу удалено
-    assert "Привет" not in " ".join(session.texts())
 
-    # клавиатуру ставим только при первом входе
-    session.reset()
+    def has_kb(params):
+        rm = params.get("reply_markup") or {}
+        return [[b["text"] for b in row] for row in rm.get("keyboard", [])] == [[t.MENU_EVENT, t.MENU_TICKET], [t.MENU_CANCEL]]
+
     await send(text_update(UID, "/start"))
-    assert "DeleteMessage" not in session.names()
+    assert "DeleteMessage" not in session.names()  # никаких служебных сообщений
+    assert len(session.texts()) == 1 and "Осталось мест: 75" in session.last_text()
+
     await send(text_update(UID, "Ближайшая встреча"))  # старая подпись без эмодзи тоже работает
     assert "Осталось мест: 75" in session.last_text()
-
-    # у кого клавиатура старой версии, получат новую при следующем входе
-    from bot.db.models import FsmState
-    from sqlalchemy import update as sa_update
-
-    async with sessionmaker() as s, s.begin():
-        await s.execute(sa_update(FsmState).values(data={"kb": True}))
-    session.reset()
-    await send(text_update(UID, "Ближайшая встреча"))
-    assert session.names()[:2] == ["SendMessage", "DeleteMessage"]
-
     session.reset()
     await send(text_update(UID, t.MENU_EVENT))
     assert "Осталось мест: 75" in session.last_text()
     await send(text_update(UID, t.MENU_TICKET))
-    assert session.last_text() == t.NO_TICKET
+    assert session.last_text() == t.NO_TICKET and has_kb(session.params("SendMessage")[-1])
     await send(text_update(UID, t.MENU_CANCEL))
     assert session.last_text() == t.CANCEL_NOTHING
 
-    # кнопка внизу посреди анкеты не считается ответом на шаг
+    # кнопка внизу посреди анкеты не считается ответом на шаг; после телефона клавиатура возвращается
     await send(callback_update(UID, "go:1"))
     await send(text_update(UID, "Иванов Иван"))
     await send(contact_update(UID, UID))
     after_phone = [p for n, p in session.calls if n == "SendMessage" and p["text"] == t.PHONE_SAVED][0]
-    assert after_phone["reply_markup"]["keyboard"][0][0]["text"] == t.MENU_EVENT  # меню вернулось
+    assert has_kb(after_phone)
     await send(text_update(UID, t.MENU_TICKET))
     assert session.last_text() == t.NO_TICKET
     await send(text_update(UID, "ivan@mail.ru"))
-    assert session.last_text() == t.ASK_UNIVERSITY  # анкета продолжилась с того же шага
+    assert session.last_text() == t.ASK_UNIVERSITY
 
-    # после регистрации кнопка «Мой билет» показывает билет, «Не смогу прийти» спрашивает подтверждение
     await send(callback_update(UID, "f:university:sech"))
     await send(callback_update(UID, "f:status:student"))
     await send(callback_update(UID, "f:interests:medtech"))
     await send(callback_update(UID, "f:interests:done"))
     await send(callback_update(UID, "f:pdn:adult"))
+    session.reset()
     await send(callback_update(UID, "f:news:no"))
+    assert has_kb(session.params("SendDocument")[0])  # PDF-билет ставит клавиатуру
+
     session.reset()
     await send(text_update(UID, t.MENU_TICKET))
-    assert "Твой билет №1" in session.texts()[0]
+    assert "Твой билет №1" in session.texts()[0] and has_kb(session.params("SendDocument")[0])
     await send(text_update(UID, t.MENU_CANCEL))
     assert session.last_text() == t.CANCEL_CONFIRM

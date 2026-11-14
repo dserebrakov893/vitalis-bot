@@ -26,27 +26,16 @@ async def _prefer_widgets(state: FSMContext) -> bool:
     return not (await state.get_data()).get("fallback", False)
 
 
-async def _install_keyboard(message: Message) -> None:
-    """Первый вход (или после /delete_me): ставим клавиатуру внизу без лишнего сообщения в чате.
-
-    У карточки уже есть inline-кнопка «Иду», а у сообщения может быть только одна клавиатура. Поэтому
-    клавиатуру ставит служебное сообщение, которое сразу удаляется: клавиатура остаётся у клиента."""
-    try:
-        msg = await message.answer("⌨️", reply_markup=kb.main_kb(), disable_notification=True)
-        await message.bot.delete_message(message.chat.id, msg.message_id)
-    except Exception as e:  # noqa: BLE001 — клавиатура не критична
-        log.warning("cannot install bottom keyboard for user %s: %r", message.from_user.id, e)
-
-
 async def open_bot(message: Message, state: FSMContext, sm: async_sessionmaker, delivery: Delivery,
                    source: str | None, prefer_widgets: bool) -> None:
     user = message.from_user
     old = await state.get_data()
     src = source or old.get("source")
     await state.clear()
-    await state.update_data(source=src, fallback=not prefer_widgets, kb=kb.MAIN_KB_VERSION)
-    if old.get("kb") != kb.MAIN_KB_VERSION:
-        await _install_keyboard(message)
+    # Клавиатуру внизу ставят обычные сообщения бота (PDF-билет, «Номер сохранили», ответы без
+    # inline-кнопок). Отдельное служебное сообщение с последующим удалением не годится:
+    # на iOS клавиатура пропадает вместе с ним.
+    await state.update_data(source=src, fallback=not prefer_widgets)
     async with sm() as s, s.begin():
         await regs.touch_user(s, user.id, user.username, user.first_name, source)
     async with sm() as s:

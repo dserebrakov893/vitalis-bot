@@ -12,10 +12,6 @@ def _ib(text: str, data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=data)
 
 
-# Поднимите версию при смене кнопок: бот заново поставит клавиатуру тем, у кого старая
-MAIN_KB_VERSION = 2
-
-
 def main_kb() -> ReplyKeyboardMarkup:
     """Постоянная клавиатура внизу чата."""
     return ReplyKeyboardMarkup(

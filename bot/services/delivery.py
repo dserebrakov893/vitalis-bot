@@ -153,7 +153,9 @@ class Delivery:
             log.exception("pdf render failed for reg %s", reg.id)
             return
         file = BufferedInputFile(data, filename=f"Vitalis_bilet_{reg.ticket_no}.pdf")
-        await safe_call(lambda: self.bot.send_document(user.id, file), what="ticket pdf", user_id=user.id)
+        # PDF приходит с каждым билетом, поэтому он же ставит клавиатуру внизу
+        await safe_call(lambda: self.bot.send_document(user.id, file, reply_markup=kb.main_kb()),
+                        what="ticket pdf", user_id=user.id)
         if send_email and user.email and mailer.enabled():
             await mailer.send_ticket(user.email, user.full_name or "", data, reg.ticket_no)
 
