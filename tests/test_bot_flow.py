@@ -211,6 +211,16 @@ async def test_bottom_keyboard(env, sessionmaker):
     await send(text_update(UID, "Ближайшая встреча"))  # старая подпись без эмодзи тоже работает
     assert "Осталось мест: 75" in session.last_text()
 
+    # у кого клавиатура старой версии, получат новую при следующем входе
+    from bot.db.models import FsmState
+    from sqlalchemy import update as sa_update
+
+    async with sessionmaker() as s, s.begin():
+        await s.execute(sa_update(FsmState).values(data={"kb": True}))
+    session.reset()
+    await send(text_update(UID, "Ближайшая встреча"))
+    assert session.names()[:2] == ["SendMessage", "DeleteMessage"]
+
     session.reset()
     await send(text_update(UID, t.MENU_EVENT))
     assert "Осталось мест: 75" in session.last_text()

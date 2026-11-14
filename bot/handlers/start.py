@@ -44,8 +44,8 @@ async def open_bot(message: Message, state: FSMContext, sm: async_sessionmaker, 
     old = await state.get_data()
     src = source or old.get("source")
     await state.clear()
-    await state.update_data(source=src, fallback=not prefer_widgets, kb=True)
-    if not old.get("kb"):
+    await state.update_data(source=src, fallback=not prefer_widgets, kb=kb.MAIN_KB_VERSION)
+    if old.get("kb") != kb.MAIN_KB_VERSION:
         await _install_keyboard(message)
     async with sm() as s, s.begin():
         await regs.touch_user(s, user.id, user.username, user.first_name, source)
