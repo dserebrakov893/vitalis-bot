@@ -8,7 +8,7 @@ from tests.fake_telegram import text_update
 async def test_mail_disabled_without_smtp_host(caplog):
     cfg = Settings(smtp_host="")
     caplog.set_level("INFO")
-    assert await mailer.send_ticket("a@b.ru", "Иванов Иван", b"%PDF", 1, cfg=cfg) is False
+    assert await mailer.send_ticket("a@b.ru", "Иванов Иван", b"%PDF", cfg=cfg) is False
     assert await mailer.send_newsletter("a@b.ru", "Тема", "Текст", cfg=cfg) is False
     assert "mail disabled" in caplog.text
 
@@ -23,11 +23,11 @@ async def test_mail_enabled_builds_message(monkeypatch):
 
     monkeypatch.setattr(aiosmtplib, "send", fake_send)
     cfg = replace(Settings(), smtp_host="smtp.example.ru", smtp_port=465, smtp_from="club@example.ru")
-    assert await mailer.send_ticket("a@b.ru", "Иванов Иван", b"%PDF-1", 7, cfg=cfg)
+    assert await mailer.send_ticket("a@b.ru", "Иванов Иван", b"%PDF-1", cfg=cfg)
     assert await mailer.send_newsletter("a@b.ru", "Новости", "Текст", cfg=cfg)
     ticket, news = sent[0][0], sent[1][0]
     assert sent[0][1]["use_tls"] is True
-    assert [p.get_filename() for p in ticket.iter_attachments()] == ["Vitalis_bilet_7.pdf"]
+    assert [p.get_filename() for p in ticket.iter_attachments()] == ["Vitalis_bilet.pdf"]
     assert mailer.UNSUBSCRIBE_URL in news.get_content() and news["List-Unsubscribe"]
 
 

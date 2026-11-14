@@ -95,10 +95,10 @@ async def test_full_registration_flow(env, sessionmaker):
     session.reset()
     await send(callback_update(UID, "f:news:no"))
     texts = session.texts()
-    assert texts[0].startswith("<b>Готово, Иван, ты в списке!</b>") and "Твой билет №1 ниже. Ещё мы продублировали его файлом." in texts[0]
-    assert "Твой билет №1" in texts[1] and "Иванов Иван Иванович" in texts[1]
+    assert texts[0].startswith("<b>Готово, Иван, ты в списке!</b>") and "Твой билет ниже. Ещё мы продублировали его файлом." in texts[0]
+    assert "<b>Твой билет</b>" in texts[1] and "Иванов Иван Иванович" in texts[1]
     docs = [p for n, p in session.calls if n == "SendDocument"]
-    assert len(docs) == 1 and docs[0]["document"].filename == "Vitalis_bilet_1.pdf"
+    assert len(docs) == 1 and docs[0]["document"].filename == "Vitalis_bilet.pdf"
     assert docs[0]["document"].data.startswith(b"%PDF")
 
     # повторный тап по последней кнопке: второго билета нет
@@ -123,12 +123,12 @@ async def test_full_registration_flow(env, sessionmaker):
     # /start теперь показывает билет, а не карточку
     session.reset()
     await send(text_update(UID, "/start"))
-    assert "Твой билет №1" in session.last_text()
+    assert "<b>Твой билет</b>" in session.last_text()
 
     # /ticket повторно присылает билет и PDF
     session.reset()
     await send(text_update(UID, "/ticket"))
-    assert session.names().count("SendDocument") == 1 and "Твой билет №1" in session.texts()[0]
+    assert session.names().count("SendDocument") == 1 and "<b>Твой билет</b>" in session.texts()[0]
 
 
 async def test_cancel_and_waitlist_promotion(env, sessionmaker, engine):
@@ -154,7 +154,7 @@ async def test_cancel_and_waitlist_promotion(env, sessionmaker, engine):
     texts = session.texts()
     assert t.CANCEL_DONE in texts
     promoted = [p for n, p in calls if n == "SendMessage" and p["chat_id"] == UID + 1]
-    assert promoted[0]["text"] == t.PROMOTED and "Твой билет №2" in promoted[1]["text"]
+    assert promoted[0]["text"] == t.PROMOTED and "<b>Твой билет</b>" in promoted[1]["text"]
 
     session.reset()
     await send(callback_update(UID, "cx:yes:1"))  # повторный тап
@@ -236,6 +236,6 @@ async def test_bottom_keyboard(env, sessionmaker):
 
     session.reset()
     await send(text_update(UID, t.MENU_TICKET))
-    assert "Твой билет №1" in session.texts()[0] and has_kb(session.params("SendDocument")[0])
+    assert "<b>Твой билет</b>" in session.texts()[0] and has_kb(session.params("SendDocument")[0])
     await send(text_update(UID, t.MENU_CANCEL))
     assert session.last_text() == t.CANCEL_CONFIRM

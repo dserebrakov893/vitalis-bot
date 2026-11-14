@@ -302,7 +302,7 @@ async def test_widget_errors_fall_back(wenv, sessionmaker):
     await fill_form(send, session, UID)
     session.reset()
     await send(callback_update(UID, "f:news:no"))
-    assert any("Твой билет №1" in x for x in session.texts())
+    assert any("<b>Твой билет</b>" in x for x in session.texts())
     assert session.names().count("SendDocument") == 1
 
 
@@ -313,10 +313,10 @@ async def test_reg_command_never_uses_widgets(wenv):
     await fill_form(send, session, UID)
     await send(callback_update(UID, "f:news:no"))
     assert not session.params("SendWidget") and not session.params("SendSharedWidget")
-    assert any("Твой билет №1" in x for x in session.texts())
+    assert any("<b>Твой билет</b>" in x for x in session.texts())
     session.reset()
     await send(text_update(UID, "/ticket"))
-    assert not session.params("SendWidget") and "Твой билет №1" in session.texts()[0]
+    assert not session.params("SendWidget") and "<b>Твой билет</b>" in session.texts()[0]
 
 
 async def test_kill_switch(wenv):

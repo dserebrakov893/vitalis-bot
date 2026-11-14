@@ -35,7 +35,7 @@ async def _send(msg: EmailMessage, cfg: Settings) -> bool:
         return False
 
 
-async def send_ticket(email: str, full_name: str, pdf_bytes: bytes, ticket_no: int | None = None,
+async def send_ticket(email: str, full_name: str, pdf_bytes: bytes,
                       cfg: Settings | None = None) -> bool:
     cfg = cfg or settings
     if not enabled(cfg):
@@ -46,11 +46,11 @@ async def send_ticket(email: str, full_name: str, pdf_bytes: bytes, ticket_no: i
     msg["To"] = email
     msg["Subject"] = "Твой билет на встречу Vitalis"
     msg.set_content(
-        f"{full_name}, привет!\n\nБилет на встречу клуба Vitalis во вложении. "
-        "Покажи QR-код на входе.\n\nНапоминания придут в Telegram-бот.\n\nБилет сделан JBD · justbusinessdarling.com"
+        f"{full_name}, привет!\n\nБилет на встречу клуба Vitalis во вложении.\n\n"
+        "Напоминания придут в Telegram-бот.\n\nБилет сделан JBD · justbusinessdarling.com"
     )
     msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf",
-                       filename=f"Vitalis_bilet_{ticket_no or ''}.pdf".replace("_.pdf", ".pdf"))
+                       filename="Vitalis_bilet.pdf")
     return await _send(msg, cfg)
 
 

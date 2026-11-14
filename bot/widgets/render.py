@@ -121,6 +121,6 @@ def card_caption(event: Event, left: int) -> str:
 
 def ticket_caption(event: Event, reg: Registration) -> str:
     return (
-        f"Билет №{reg.ticket_no} · Vitalis, {fmt_datetime(event.starts_at)}\n\n"
+        f"Твой билет · Vitalis, {fmt_datetime(event.starts_at)}\n\n"
         "Не видишь карточку? Обнови Telegram или нажми /reg"
     )

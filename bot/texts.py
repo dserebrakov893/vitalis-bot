@@ -140,11 +140,11 @@ MAIN_HINT = (
 )
 
 
-def registered_text(name: str, ticket_no: int, with_file: bool = True) -> str:
+def registered_text(name: str, with_file: bool = True) -> str:
     file_part = " Ещё мы продублировали его файлом." if with_file else ""
     return (
         f"<b>Готово, {escape(name)}, ты в списке!</b>\n\n"
-        f"Твой билет №{ticket_no} ниже.{file_part}\n"
+        f"Твой билет ниже.{file_part}\n"
         "Напомним о встрече за день и за 2 часа до начала."
     )
 

@@ -48,7 +48,7 @@ def render_ticket_pdf(user: User, event: Event, reg: Registration, secret: str |
     text_w = width - 2 * margin
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A6)
-    c.setTitle(f"Vitalis, билет №{reg.ticket_no}")
+    c.setTitle("Vitalis, билет")
     c.setAuthor("JBD")
 
     # шапка: текстовый логотип (логотип Vitalis [TODO])

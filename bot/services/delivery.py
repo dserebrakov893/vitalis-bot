@@ -55,7 +55,7 @@ TICKET_STATUS = {
 def ticket_text(user: User, event: Event, reg: Registration) -> str:
     return "\n".join(
         [
-            f"<b>Твой билет №{reg.ticket_no}</b>",
+            "<b>Твой билет</b>",
             escape(user.full_name or user.tg_first_name or ""),
             "",
             escape(event.title),
@@ -152,12 +152,12 @@ class Delivery:
         except Exception:  # noqa: BLE001 — PDF это план Б, его поломка не должна ронять регистрацию
             log.exception("pdf render failed for reg %s", reg.id)
             return
-        file = BufferedInputFile(data, filename=f"Vitalis_bilet_{reg.ticket_no}.pdf")
+        file = BufferedInputFile(data, filename="Vitalis_bilet.pdf")
         # PDF приходит с каждым билетом, поэтому он же ставит клавиатуру внизу
         await safe_call(lambda: self.bot.send_document(user.id, file, reply_markup=kb.main_kb()),
                         what="ticket pdf", user_id=user.id)
         if send_email and user.email and mailer.enabled():
-            await mailer.send_ticket(user.email, user.full_name or "", data, reg.ticket_no)
+            await mailer.send_ticket(user.email, user.full_name or "", data)
 
     # ---------- после регистрации / отмены ----------
     async def after_registration(self, result: regs.RegResult, *, prefer_widgets: bool = True) -> None:
@@ -165,7 +165,7 @@ class Delivery:
         async with self.sm() as s:
             user = await s.get(User, reg.user_id)
         if reg.state == "registered":
-            intro = t.registered_text(first_name(user.full_name, user.tg_first_name), reg.ticket_no, self.pdf_renderer is not None)
+            intro = t.registered_text(first_name(user.full_name, user.tg_first_name), self.pdf_renderer is not None)
             await self.send_ticket(reg.id, prefer_widgets=prefer_widgets, intro=intro if result.created else None,
                                    send_email=result.created)
         else:
