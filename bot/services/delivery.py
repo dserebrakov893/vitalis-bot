@@ -14,6 +14,7 @@ from bot import keyboards as kb
 from bot import texts as t
 from bot.db.models import Event, Registration, User
 from bot.formatting import calendar_url, first_name, fmt_datetime, fmt_weekday
+from bot.services import mailer
 from bot.services import registration as regs
 
 log = logging.getLogger(__name__)
@@ -101,7 +102,8 @@ class Delivery:
         )
 
     # ---------- билет ----------
-    async def send_ticket(self, reg_id: int, *, prefer_widgets: bool = True, intro: str | None = None) -> None:
+    async def send_ticket(self, reg_id: int, *, prefer_widgets: bool = True, intro: str | None = None,
+                          send_email: bool = False) -> None:
         async with self.sm() as s:
             reg = await load_registration(s, reg_id)
         if reg is None or reg.state != "registered":
@@ -127,9 +129,9 @@ class Delivery:
                 what="ticket text",
                 user_id=chat_id,
             )
-        await self.send_ticket_pdf(user, event, reg)
+        await self.send_ticket_pdf(user, event, reg, send_email=send_email)
 
-    async def send_ticket_pdf(self, user: User, event: Event, reg: Registration) -> None:
+    async def send_ticket_pdf(self, user: User, event: Event, reg: Registration, send_email: bool = False) -> None:
         if self.pdf_renderer is None:
             return
         from aiogram.types import BufferedInputFile
@@ -141,6 +143,8 @@ class Delivery:
             return
         file = BufferedInputFile(data, filename=f"Vitalis_bilet_{reg.ticket_no}.pdf")
         await safe_call(lambda: self.bot.send_document(user.id, file), what="ticket pdf", user_id=user.id)
+        if send_email and user.email and mailer.enabled():
+            await mailer.send_ticket(user.email, user.full_name or "", data, reg.ticket_no)
 
     # ---------- после регистрации / отмены ----------
     async def after_registration(self, result: regs.RegResult, *, prefer_widgets: bool = True) -> None:
@@ -149,7 +153,8 @@ class Delivery:
             user = await s.get(User, reg.user_id)
         if reg.state == "registered":
             intro = t.registered_text(first_name(user.full_name, user.tg_first_name), reg.ticket_no, self.pdf_renderer is not None)
-            await self.send_ticket(reg.id, prefer_widgets=prefer_widgets, intro=intro if result.created else None)
+            await self.send_ticket(reg.id, prefer_widgets=prefer_widgets, intro=intro if result.created else None,
+                                   send_email=result.created)
         else:
             text = t.waitlist_text(result.waitlist_position or 1)
             await safe_call(lambda: self.bot.send_message(user.id, text), what="waitlist", user_id=user.id)
@@ -157,7 +162,7 @@ class Delivery:
 
     async def notify_promoted(self, promoted: list[Registration]) -> None:
         for reg in promoted:
-            await self.send_ticket(reg.id, intro=t.PROMOTED)
+            await self.send_ticket(reg.id, intro=t.PROMOTED, send_email=True)
             await asyncio.sleep(SEND_DELAY)
 
     async def seats_changed(self, event_id: int) -> None:

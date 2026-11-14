@@ -56,6 +56,11 @@ async def open_bot(message: Message, state: FSMContext, sm: async_sessionmaker, 
 @router.message(CommandStart())
 async def cmd_start(message: Message, command: CommandObject, state: FSMContext, sm: async_sessionmaker,
                     delivery: Delivery) -> None:
+    if (command.args or "").strip() == "unsubscribe":
+        # ссылка на отписку из писем рассылки
+        await regs.unsubscribe(sm, message.from_user.id)
+        await message.answer(t.UNSUBSCRIBED)
+        return
     await open_bot(message, state, sm, delivery, parse_source(command.args), prefer_widgets=True)
 
 
