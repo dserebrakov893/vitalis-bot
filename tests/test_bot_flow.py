@@ -202,8 +202,10 @@ async def test_bottom_keyboard(env, sessionmaker):
         return [[b["text"] for b in row] for row in rm.get("keyboard", [])] == [[t.MENU_EVENT, t.MENU_TICKET], [t.MENU_CANCEL]]
 
     await send(text_update(UID, "/start"))
-    assert "DeleteMessage" not in session.names()  # никаких служебных сообщений
-    assert len(session.texts()) == 1 and "Осталось мест: 75" in session.last_text()
+    assert "DeleteMessage" not in session.names()
+    first, card = session.params("SendMessage")[:2]
+    assert first["text"] == t.CARD_LEAD and has_kb(first)  # кнопки внизу сразу с первым /start
+    assert "Осталось мест: 75" in card["text"]
 
     await send(text_update(UID, "Ближайшая встреча"))  # старая подпись без эмодзи тоже работает
     assert "Осталось мест: 75" in session.last_text()

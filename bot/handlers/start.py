@@ -54,6 +54,9 @@ async def open_bot(message: Message, state: FSMContext, sm: async_sessionmaker, 
     if event is None:
         await message.answer(t.NO_EVENTS, reply_markup=kb.main_kb())
         return
+    # Одна строка перед карточкой ставит клавиатуру внизу: у карточки своя inline-кнопка «Иду»,
+    # а у сообщения может быть только одна клавиатура
+    await message.answer(t.CARD_LEAD, reply_markup=kb.main_kb())
     await delivery.send_event_card(message.chat.id, event, prefer_widgets=prefer_widgets)
 
 

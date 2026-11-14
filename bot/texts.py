@@ -56,6 +56,7 @@ MENU_CANCEL = "🚫 Не смогу прийти"
 MENU_EVENT_ALIASES = (MENU_EVENT, "Ближайшая встреча")
 MENU_TICKET_ALIASES = (MENU_TICKET, "Мой билет")
 MENU_CANCEL_ALIASES = (MENU_CANCEL, "Не смогу прийти")
+CARD_LEAD = "Ближайшая встреча клуба 👇"
 MENU_BUTTONS = MENU_EVENT_ALIASES + MENU_TICKET_ALIASES + MENU_CANCEL_ALIASES
 BTN_BACK = "← Назад"
 BTN_ADULT = "Мне 18+, согласен"
