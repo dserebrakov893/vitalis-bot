@@ -77,12 +77,14 @@ async def cb_cancel_no(call: CallbackQuery) -> None:
         pass
 
 
-@router.message(Command("club"))
+# /club и /about временно отключены (14.11.2026): нет ссылок на канал и чат, текст «О клубе» на согласовании.
+# Чтобы вернуть: раскомментировать обработчики и строки в texts.COMMANDS.
+# @router.message(Command("club"))
 async def cmd_club(message: Message) -> None:
     await message.answer(t.club_text(settings.club_channel_url, settings.club_chat_url), disable_web_page_preview=True)
 
 
-@router.message(Command("about"))
+# @router.message(Command("about"))
 async def cmd_about(message: Message) -> None:
     await message.answer(t.about_text(settings.privacy_policy_url), disable_web_page_preview=True)
 

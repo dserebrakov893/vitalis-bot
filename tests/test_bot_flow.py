@@ -179,14 +179,16 @@ async def test_delete_me(env, sessionmaker):
         assert (await s.execute(select(Registration))).first() is None
 
 
-@pytest.mark.parametrize("cmd, expected", [("/club", t.CLUB_EMPTY), ("/unsubscribe", t.UNSUBSCRIBED)])
+@pytest.mark.parametrize("cmd, expected", [("/unsubscribe", t.UNSUBSCRIBED)])
 async def test_simple_commands(env, cmd, expected):
     _, session, send, _ = env
     await send(text_update(UID, cmd))
     assert session.last_text() == expected
 
 
-async def test_about_mentions_operator(env):
+async def test_club_and_about_are_disabled(env):
     _, session, send, _ = env
-    await send(text_update(UID, "/about"))
-    assert "hello@justbusinessdarling.com" in session.last_text()
+    for cmd in ("/club", "/about"):
+        await send(text_update(UID, cmd))
+        assert session.last_text().startswith("Нажми /start")
+    assert [c for c, _ in t.COMMANDS] == ["start", "ticket", "cancel"]

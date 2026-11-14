@@ -183,7 +183,7 @@ async def test_command_during_form_is_not_an_answer(aenv):
     session, send = aenv
     await send(text_update(501, "/start"))
     await send(callback_update(501, "go:1"))
-    await send(text_update(501, "/about"))
-    assert "hello@justbusinessdarling.com" in session.last_text()
+    await send(text_update(501, "/ticket"))
+    assert session.last_text() == t.NO_TICKET
     await send(text_update(501, "Иванов Иван"))
     assert session.last_text() == t.ASK_PHONE
