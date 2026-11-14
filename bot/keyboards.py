@@ -86,3 +86,11 @@ def delete_confirm_kb() -> InlineKeyboardMarkup:
 
 def rating_kb(event_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[_ib(str(i), f"rate:{event_id}:{i}") for i in range(1, 6)]])
+
+
+def reminder_kb(event_id: int, venue_url: str | None) -> InlineKeyboardMarkup:
+    rows = []
+    if venue_url:
+        rows.append([InlineKeyboardButton(text=t.BTN_MAP, url=venue_url)])
+    rows.append([_ib(t.BTN_CANT_COME, f"cx:ask:{event_id}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)

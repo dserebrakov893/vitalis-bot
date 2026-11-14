@@ -132,6 +132,27 @@ async def cb_delete_no(call: CallbackQuery) -> None:
         pass
 
 
+@router.callback_query(F.data.startswith("rate:"))
+async def cb_rate(call: CallbackQuery, sm: async_sessionmaker, delivery: Delivery) -> None:
+    from bot.services.reminders import RATED_TEXT, save_rating
+
+    try:
+        _, event_id, score = call.data.split(":")
+        reg = await save_rating(sm, call.from_user.id, int(event_id), int(score))
+    except ValueError:
+        reg = None
+    await call.answer(RATED_TEXT if reg else "")
+    if reg is None:
+        return
+    log.info("rated user=%s event=%s", call.from_user.id, reg.event_id)
+    try:
+        await call.message.edit_text(f"{RATED_TEXT} Твоя оценка: {reg.feedback_score} из 5.")
+    except Exception:  # noqa: BLE001
+        pass
+    if delivery.widgets is not None and reg.ticket_widget_status == "done":
+        await delivery.widgets.set_ticket_status(reg, "done")
+
+
 @router.message(F.chat.type == "private")
 async def fallback_message(message: Message) -> None:
     await message.answer("Нажми /start, чтобы открыть ближайшую встречу, или /ticket, чтобы увидеть билет.")

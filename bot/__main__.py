@@ -13,6 +13,7 @@ from bot.config import settings
 from bot.db.engine import make_engine, make_sessionmaker
 from bot.services.delivery import Delivery
 from bot.services.pdf_ticket import render_ticket_pdf
+from bot.services.reminders import Reminders
 from bot.widgets.service import WidgetService
 
 
@@ -33,9 +34,11 @@ async def main() -> None:
     logging.getLogger(__name__).info("widgets enabled: %s", settings.widgets_enabled)
     dp = build_dispatcher(sm, delivery)
     await setup_bot_profile(bot)
+    reminders_task = asyncio.create_task(Reminders(sm, delivery).run_forever())
     try:
         await dp.start_polling(bot, allowed_updates=ALLOWED_UPDATES)
     finally:
+        reminders_task.cancel()
         await engine.dispose()
         await bot.session.close()
 
