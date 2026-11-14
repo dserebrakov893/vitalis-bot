@@ -190,5 +190,52 @@ async def test_club_and_about_are_disabled(env):
     _, session, send, _ = env
     for cmd in ("/club", "/about"):
         await send(text_update(UID, cmd))
-        assert session.last_text().startswith("Нажми /start")
+        assert session.last_text() == t.MAIN_HINT
     assert [c for c, _ in t.COMMANDS] == ["start", "ticket", "cancel"]
+
+
+async def test_bottom_keyboard(env, sessionmaker):
+    _, session, send, _ = env
+    await send(text_update(UID, "/start"))
+    welcome = session.params("SendMessage")[0]
+    assert welcome["text"] == t.WELCOME
+    kb = [[b["text"] for b in row] for row in welcome["reply_markup"]["keyboard"]]
+    assert kb == [[t.MENU_EVENT, t.MENU_TICKET], [t.MENU_CANCEL]]
+    assert welcome["reply_markup"]["is_persistent"]
+
+    # приветствие только при первом входе
+    session.reset()
+    await send(text_update(UID, "/start"))
+    assert t.WELCOME not in session.texts()
+
+    session.reset()
+    await send(text_update(UID, t.MENU_EVENT))
+    assert "Осталось мест: 75" in session.last_text()
+    await send(text_update(UID, t.MENU_TICKET))
+    assert session.last_text() == t.NO_TICKET
+    await send(text_update(UID, t.MENU_CANCEL))
+    assert session.last_text() == t.CANCEL_NOTHING
+
+    # кнопка внизу посреди анкеты не считается ответом на шаг
+    await send(callback_update(UID, "go:1"))
+    await send(text_update(UID, "Иванов Иван"))
+    await send(contact_update(UID, UID))
+    after_phone = [p for n, p in session.calls if n == "SendMessage" and p["text"] == "Номер сохранили."][0]
+    assert after_phone["reply_markup"]["keyboard"][0][0]["text"] == t.MENU_EVENT  # меню вернулось
+    await send(text_update(UID, t.MENU_TICKET))
+    assert session.last_text() == t.NO_TICKET
+    await send(text_update(UID, "ivan@mail.ru"))
+    assert session.last_text() == t.ASK_UNIVERSITY  # анкета продолжилась с того же шага
+
+    # после регистрации кнопка «Мой билет» показывает билет, «Не смогу прийти» спрашивает подтверждение
+    await send(callback_update(UID, "f:university:sech"))
+    await send(callback_update(UID, "f:status:student"))
+    await send(callback_update(UID, "f:interests:medtech"))
+    await send(callback_update(UID, "f:interests:done"))
+    await send(callback_update(UID, "f:pdn:adult"))
+    await send(callback_update(UID, "f:news:no"))
+    session.reset()
+    await send(text_update(UID, t.MENU_TICKET))
+    assert "Vitalis · билет №1" in session.texts()[0]
+    await send(text_update(UID, t.MENU_CANCEL))
+    assert session.last_text() == t.CANCEL_CONFIRM

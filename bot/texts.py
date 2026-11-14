@@ -43,6 +43,12 @@ def consent_pdn_html(policy_url: str) -> str:
 
 
 BTN_GO = "Иду"
+# постоянная клавиатура внизу чата
+MENU_EVENT = "Ближайшая встреча"
+MENU_TICKET = "Мой билет"
+MENU_CANCEL = "Не смогу прийти"
+MENU_BUTTONS = (MENU_EVENT, MENU_TICKET, MENU_CANCEL)
+WELCOME = "Привет! Это бот регистрации бизнес-клуба Vitalis. Кнопки внизу всегда под рукой: встреча, билет и отмена."
 BTN_BACK = "← Назад"
 BTN_ADULT = "Мне 18+, согласен"
 BTN_MINOR = "Мне 17, родитель согласен"
@@ -96,6 +102,9 @@ FORM_EXPIRED = "Эта кнопка уже не активна."
 NO_EVENTS = "Ближайших встреч пока нет. Анонсы появятся в канале клуба, бот тоже напишет."
 REG_CLOSED = "Регистрация на эту встречу закрыта."
 WIDGET_CAPTION_HINT = "Не видишь карточку? Обнови Telegram или нажми /reg"
+
+
+MAIN_HINT = "Нажми «Ближайшая встреча» внизу, чтобы открыть карточку встречи, или «Мой билет», чтобы увидеть билет."
 
 
 def registered_text(name: str, ticket_no: int, with_file: bool = True) -> str:

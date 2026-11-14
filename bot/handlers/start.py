@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from bot import keyboards as kb
 from bot import texts as t
 from bot.db.models import Consent, Event, User
 from bot.handlers.form import Form, ask
@@ -31,7 +32,10 @@ async def open_bot(message: Message, state: FSMContext, sm: async_sessionmaker, 
     old = await state.get_data()
     src = source or old.get("source")
     await state.clear()
-    await state.update_data(source=src, fallback=not prefer_widgets)
+    await state.update_data(source=src, fallback=not prefer_widgets, kb=True)
+    if not old.get("kb"):
+        # первый вход (или после /delete_me): ставим постоянную клавиатуру внизу
+        await message.answer(t.WELCOME, reply_markup=kb.main_kb())
     async with sm() as s, s.begin():
         await regs.touch_user(s, user.id, user.username, user.first_name, source)
     async with sm() as s:
@@ -45,10 +49,10 @@ async def open_bot(message: Message, state: FSMContext, sm: async_sessionmaker, 
     if active is not None and active.state == "waitlist":
         async with sm() as s:
             pos = await regs.waitlist_position(s, active)
-        await message.answer(t.ALREADY_WAITLIST.format(position=pos))
+        await message.answer(t.ALREADY_WAITLIST.format(position=pos), reply_markup=kb.main_kb())
         return
     if event is None:
-        await message.answer(t.NO_EVENTS)
+        await message.answer(t.NO_EVENTS, reply_markup=kb.main_kb())
         return
     await delivery.send_event_card(message.chat.id, event, prefer_widgets=prefer_widgets)
 
@@ -75,9 +79,9 @@ async def cmd_ticket(message: Message, state: FSMContext, sm: async_sessionmaker
         active = await regs.get_active_registration(s, message.from_user.id)
         pos = await regs.waitlist_position(s, active) if active is not None else None
     if active is None:
-        await message.answer(t.NO_TICKET)
+        await message.answer(t.NO_TICKET, reply_markup=kb.main_kb())
     elif active.state == "waitlist":
-        await message.answer(t.ALREADY_WAITLIST.format(position=pos))
+        await message.answer(t.ALREADY_WAITLIST.format(position=pos), reply_markup=kb.main_kb())
     else:
         await delivery.send_ticket(active.id, prefer_widgets=await _prefer_widgets(state))
 
@@ -137,3 +141,23 @@ async def cb_go(call: CallbackQuery, bot: Bot, state: FSMContext, sm: async_sess
     except ValueError:
         return
     await begin_registration(bot, call.message.chat.id, call.from_user.id, event_id, state, sm, delivery)
+
+
+# ---------- постоянная клавиатура внизу ----------
+# Обработчики в этом роутере, а он подключён раньше анкеты: кнопка работает на любом шаге.
+
+@router.message(F.text == t.MENU_EVENT)
+async def menu_event(message: Message, state: FSMContext, sm: async_sessionmaker, delivery: Delivery) -> None:
+    await open_bot(message, state, sm, delivery, None, prefer_widgets=await _prefer_widgets(state))
+
+
+@router.message(F.text == t.MENU_TICKET)
+async def menu_ticket(message: Message, state: FSMContext, sm: async_sessionmaker, delivery: Delivery) -> None:
+    await cmd_ticket(message, state, sm, delivery)
+
+
+@router.message(F.text == t.MENU_CANCEL)
+async def menu_cancel(message: Message, sm: async_sessionmaker) -> None:
+    from bot.handlers.user_commands import ask_cancel
+
+    await ask_cancel(message.answer, sm, message.from_user.id)

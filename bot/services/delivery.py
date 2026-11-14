@@ -111,7 +111,8 @@ class Delivery:
         user, event = reg.user, reg.event
         chat_id = user.id
         if intro:
-            await safe_call(lambda: self.bot.send_message(chat_id, intro), what="ticket intro", user_id=chat_id)
+            await safe_call(lambda: self.bot.send_message(chat_id, intro, reply_markup=kb.main_kb()),
+                            what="ticket intro", user_id=chat_id)
 
         sent_widget = False
         if self.widgets_on(prefer_widgets):
@@ -157,7 +158,8 @@ class Delivery:
                                    send_email=result.created)
         else:
             text = t.waitlist_text(result.waitlist_position or 1)
-            await safe_call(lambda: self.bot.send_message(user.id, text), what="waitlist", user_id=user.id)
+            await safe_call(lambda: self.bot.send_message(user.id, text, reply_markup=kb.main_kb()),
+                            what="waitlist", user_id=user.id)
         await self.seats_changed(reg.event_id)
 
     async def notify_promoted(self, promoted: list[Registration]) -> None:

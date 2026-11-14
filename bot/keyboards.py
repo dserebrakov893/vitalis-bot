@@ -12,6 +12,19 @@ def _ib(text: str, data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=data)
 
 
+def main_kb() -> ReplyKeyboardMarkup:
+    """Постоянная клавиатура внизу чата."""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=t.MENU_EVENT), KeyboardButton(text=t.MENU_TICKET)],
+            [KeyboardButton(text=t.MENU_CANCEL)],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+        input_field_placeholder="Выбери кнопку внизу",
+    )
+
+
 def card_kb(event_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[_ib(t.BTN_GO, f"go:{event_id}")]])
 

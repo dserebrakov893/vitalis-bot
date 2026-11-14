@@ -93,7 +93,7 @@ async def cmd_about(message: Message) -> None:
 async def cmd_unsubscribe(message: Message, sm: async_sessionmaker) -> None:
     await regs.unsubscribe(sm, message.from_user.id)
     log.info("unsubscribed user=%s", message.from_user.id)
-    await message.answer(t.UNSUBSCRIBED)
+    await message.answer(t.UNSUBSCRIBED, reply_markup=kb.main_kb())
 
 
 @router.message(Command("delete_me"))
@@ -157,4 +157,4 @@ async def cb_rate(call: CallbackQuery, sm: async_sessionmaker, delivery: Deliver
 
 @router.message(F.chat.type == "private")
 async def fallback_message(message: Message) -> None:
-    await message.answer("Нажми /start, чтобы открыть ближайшую встречу, или /ticket, чтобы увидеть билет.")
+    await message.answer(t.MAIN_HINT, reply_markup=kb.main_kb())

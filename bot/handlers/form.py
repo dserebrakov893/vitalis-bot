@@ -7,7 +7,7 @@ from aiogram import Bot, F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
+from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from bot import keyboards as kb
@@ -27,7 +27,7 @@ from bot.services.validation import (
 log = logging.getLogger(__name__)
 router = Router(name="form")
 # Команды (/cancel, /about, …) во время анкеты не считаем ответом на шаг
-router.message.filter(~F.text.startswith("/"))
+router.message.filter(~F.text.startswith("/"), ~F.text.in_(t.MENU_BUTTONS))
 
 
 class Form(StatesGroup):
@@ -129,13 +129,13 @@ async def on_contact(message: Message, bot: Bot, state: FSMContext) -> None:
         await message.answer(t.BAD_PHONE, reply_markup=kb.phone_kb())
         return
     await state.update_data(phone=normalize_phone(message.contact.phone_number))
-    await message.answer("Номер сохранили.", reply_markup=ReplyKeyboardRemove())
+    await message.answer("Номер сохранили.", reply_markup=kb.main_kb())
     await ask(bot, message.chat.id, state, Form.email)
 
 
 @router.message(Form.phone, F.text == t.BTN_BACK)
 async def on_phone_back(message: Message, bot: Bot, state: FSMContext) -> None:
-    await message.answer("Хорошо, вернёмся на шаг назад.", reply_markup=ReplyKeyboardRemove())
+    await message.answer("Хорошо, вернёмся на шаг назад.", reply_markup=kb.main_kb())
     await ask(bot, message.chat.id, state, Form.full_name)
 
 
