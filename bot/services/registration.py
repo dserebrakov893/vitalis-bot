@@ -32,7 +32,7 @@ def utcnow() -> datetime:
 class Profile:
     full_name: str
     phone: str
-    email: str
+    email: str | None
     university: str
     status: str
     interests: list[str]

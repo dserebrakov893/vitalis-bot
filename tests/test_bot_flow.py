@@ -39,8 +39,6 @@ async def fill_form(send, session, uid=UID):
     await send(text_update(uid, "Иванов Иван Иванович"))
     assert session.last_text() == t.ASK_PHONE
     await send(contact_update(uid, uid))
-    assert session.last_text() == t.ASK_EMAIL
-    await send(text_update(uid, "Ivan@Mail.RU"))
     assert session.last_text() == t.ASK_UNIVERSITY
     await send(callback_update(uid, "f:university:sech"))
     await send(callback_update(uid, "f:status:student"))
@@ -71,9 +69,7 @@ async def test_full_registration_flow(env, sessionmaker):
     await send(text_update(UID, "+79990000000"))  # ручной ввод не принимаем
     assert session.last_text() == t.BAD_PHONE
     await send(contact_update(UID, UID))
-    await send(text_update(UID, "not-an-email"))
-    assert session.last_text() == t.BAD_EMAIL
-    await send(text_update(UID, "Ivan@Mail.RU"))
+    assert session.last_text() == t.ASK_UNIVERSITY  # сразу вуз, без почты
     await send(callback_update(UID, "f:university:other"))
     assert session.last_text() == t.ASK_UNIVERSITY_OTHER
     await send(callback_update(UID, "f:university_other:back"))
@@ -118,7 +114,7 @@ async def test_full_registration_flow(env, sessionmaker):
     assert user.source == "test" and reg.source == "test"
     assert user.university == "Казанский ГМУ" and user.interests == ["pharma_biotech"]
     assert user.project_stage is None and user.age_group == "17_with_parent"
-    assert user.email == "ivan@mail.ru" and user.phone == "+79990000000"
+    assert user.email is None and user.phone == "+79990000000"
     assert user.newsletter_opt_in is False and consents == ["pdn"]
     # после регистрации в FSM нет ПДн
     for data in fsm.scalars():
@@ -225,8 +221,9 @@ async def test_bottom_keyboard(env, sessionmaker):
     assert has_kb(after_phone)
     await send(text_update(UID, t.MENU_TICKET))
     assert session.last_text() == t.NO_TICKET
-    await send(text_update(UID, "ivan@mail.ru"))
-    assert session.last_text() == t.ASK_UNIVERSITY
+    await send(callback_update(UID, "f:university:back"))  # назад с вуза ведёт к телефону
+    assert session.last_text() == t.ASK_PHONE
+    await send(contact_update(UID, UID))
 
     await send(callback_update(UID, "f:university:sech"))
     await send(callback_update(UID, "f:status:student"))

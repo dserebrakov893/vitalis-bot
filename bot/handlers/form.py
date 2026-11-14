@@ -19,7 +19,6 @@ from bot.services.delivery import Delivery
 from bot.services.validation import (
     is_own_contact,
     normalize_phone,
-    validate_email,
     validate_full_name,
     validate_university,
 )
@@ -33,7 +32,6 @@ router.message.filter(~F.text.startswith("/"), ~F.text.in_(t.MENU_BUTTONS))
 class Form(StatesGroup):
     full_name = State()
     phone = State()
-    email = State()
     university = State()
     university_other = State()
     status = State()
@@ -45,8 +43,7 @@ class Form(StatesGroup):
 BY_NAME = {s.state.split(":", 1)[1]: s for s in Form.__all_states__}
 PREV = {
     "phone": "full_name",
-    "email": "phone",
-    "university": "email",
+    "university": "phone",
     "university_other": "university",
     "status": "university",
     "interests": "status",
@@ -66,8 +63,6 @@ async def ask(bot: Bot, chat_id: int, state: FSMContext, step: State) -> None:
         await bot.send_message(chat_id, t.ASK_FULL_NAME, reply_markup=kb.back_only(name))
     elif name == "phone":
         await bot.send_message(chat_id, t.ASK_PHONE, reply_markup=kb.phone_kb())
-    elif name == "email":
-        await bot.send_message(chat_id, t.ASK_EMAIL, reply_markup=kb.back_only(name))
     elif name == "university":
         await bot.send_message(
             chat_id, t.ASK_UNIVERSITY,
@@ -130,7 +125,7 @@ async def on_contact(message: Message, bot: Bot, state: FSMContext) -> None:
         return
     await state.update_data(phone=normalize_phone(message.contact.phone_number))
     await message.answer(t.PHONE_SAVED, reply_markup=kb.main_kb())
-    await ask(bot, message.chat.id, state, Form.email)
+    await ask(bot, message.chat.id, state, Form.university)
 
 
 @router.message(Form.phone, F.text == t.BTN_BACK)
@@ -144,16 +139,6 @@ async def on_phone_other(message: Message) -> None:
     await message.answer(t.BAD_PHONE, reply_markup=kb.phone_kb())
 
 
-@router.message(Form.email, F.text)
-async def on_email(message: Message, bot: Bot, state: FSMContext) -> None:
-    email = validate_email(message.text)
-    if email is None:
-        await message.answer(t.BAD_EMAIL, reply_markup=kb.back_only("email"))
-        return
-    await state.update_data(email=email)
-    await ask(bot, message.chat.id, state, Form.university)
-
-
 @router.message(Form.university_other, F.text)
 async def on_university_other(message: Message, bot: Bot, state: FSMContext) -> None:
     uni = validate_university(message.text)
@@ -164,7 +149,7 @@ async def on_university_other(message: Message, bot: Bot, state: FSMContext) -> 
     await ask(bot, message.chat.id, state, Form.status)
 
 
-@router.message(StateFilter(Form.full_name, Form.email, Form.university_other))
+@router.message(StateFilter(Form.full_name, Form.university_other))
 async def on_text_expected(message: Message, state: FSMContext) -> None:
     await message.answer(t.TEXT_EXPECTED)
 
@@ -260,7 +245,7 @@ async def _finish(bot: Bot, call: CallbackQuery, state: FSMContext, sm: async_se
     data = await state.get_data()
     # Сразу выходим из анкеты: повторный тап по кнопке уже не пройдёт проверку шага
     await state.set_state(None)
-    required = ("event_id", "full_name", "phone", "email", "university", "status", "age_group")
+    required = ("event_id", "full_name", "phone", "university", "status", "age_group")
     if any(not data.get(k) for k in required) or not data.get("interests"):
         log.warning("incomplete form for user %s", call.from_user.id)
         await bot.send_message(call.message.chat.id, t.FORM_BROKEN)
@@ -268,7 +253,7 @@ async def _finish(bot: Bot, call: CallbackQuery, state: FSMContext, sm: async_se
     profile = regs.Profile(
         full_name=data["full_name"],
         phone=data["phone"],
-        email=data["email"],
+        email=None,  # шаг с почтой убран 14.11.2026, колонка остаётся
         university=data["university"],
         status=data["status"],
         interests=data["interests"],

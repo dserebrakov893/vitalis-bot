@@ -92,7 +92,7 @@ async def cmd_ticket(message: Message, state: FSMContext, sm: async_sessionmaker
 async def _has_profile(sm: async_sessionmaker, user_id: int) -> bool:
     async with sm() as s:
         user = await s.get(User, user_id)
-        if user is None or not user.full_name or not user.phone or not user.email:
+        if user is None or not user.full_name or not user.phone:
             return False
         consent = (
             await s.execute(select(Consent.id).where(Consent.user_id == user_id, Consent.type == "pdn").limit(1))
