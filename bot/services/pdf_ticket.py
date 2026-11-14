@@ -59,8 +59,6 @@ def render_ticket_pdf(user: User, event: Event, reg: Registration, secret: str |
     c.drawString(margin, height - 14 * mm, "VITALIS")
     c.setFont("DejaVu", 8)
     c.drawString(margin, height - 19.5 * mm, "бизнес-клуб · медицина и биотех")
-    c.setFont("DejaVu-Bold", 12)
-    c.drawRightString(width - margin, height - 14 * mm, f"№ {reg.ticket_no}")
 
     y = height - 33 * mm
     c.setFillColor(INK)
@@ -91,10 +89,7 @@ def render_ticket_pdf(user: User, event: Event, reg: Registration, secret: str |
     qr_x = (width - qr_size) / 2
     qr_y = 15 * mm
     c.drawImage(_qr_image(make_payload(event.id, reg.ticket_no, secret)), qr_x, qr_y, qr_size, qr_size)
-    c.setFont("DejaVu", 6.5)
     c.setFillColor(MUTED)
-    c.drawCentredString(width / 2, qr_y - 4 * mm, "Покажи QR-код на входе")
-
     c.setFont("DejaVu", 6)
     c.drawCentredString(width / 2, 5 * mm, f"Билет сделан JBD · {JBD_SITE}")
     c.showPage()

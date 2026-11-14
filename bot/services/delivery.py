@@ -46,7 +46,7 @@ def event_card_text(event: Event, left: int) -> str:
 
 
 TICKET_STATUS = {
-    "registered": "Ты в списке. На входе покажи QR-код из PDF-билета.",
+    "registered": "Ты в списке.",
     "waitlist": "Ты в листе ожидания.",
     "cancelled": "Билет аннулирован.",
 }

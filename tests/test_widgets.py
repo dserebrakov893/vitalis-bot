@@ -129,7 +129,7 @@ def test_ticket_widget_js():
                               ["chat", json.dumps({**base, "r": 4, "s": "done"})],
                               ["star", 3]])
     reg, cal, cx, soon, live, done, rated = res["snaps"]
-    assert reg["n"]["t"] == "Иванов Иван Иванович" and reg["no"]["t"] == "№ 7" and reg["st"]["t"] == "Ты в списке"
+    assert reg["n"]["t"] == "Иванов Иван Иванович" and reg["st"]["t"] == "Ты в списке"
     assert res["links"] == [calendar_url_short(_event().starts_at)]
     assert cx["s"]["t"] == "Подтверди отмену в чате"
     assert soon["st"]["t"] == "Начинаем через 2 часа" and not soon["cx"]["h"]
