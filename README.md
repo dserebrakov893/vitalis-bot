@@ -3,8 +3,9 @@
 Telegram-бот регистрации на встречи бизнес-клуба Vitalis: `@vitalis_business_club_bot`.
 Разработка и оператор персональных данных: JBD (justbusinessdarling.com, hello@justbusinessdarling.com).
 
-Стек: Python 3.12, aiogram 3, PostgreSQL (Yandex Managed PostgreSQL), SQLAlchemy + asyncpg, alembic,
-reportlab + qrcode. Хостинг: Railway, long polling.
+Стек: Python 3.12, aiogram 3, PostgreSQL, SQLAlchemy + asyncpg, alembic, reportlab + qrcode.
+Хостинг: Railway (бот и плагин Postgres в одном проекте), long polling. Код к Railway не привязан:
+база задаётся только строкой `DATABASE_URL`.
 
 ## Что умеет
 
@@ -32,8 +33,7 @@ bot/
   services/          registration (места и лист ожидания), tickets (HMAC/QR), pdf_ticket,
                      delivery (что и как отправить), reminders, mailer, admin, validation
   widgets/           api.py (методы Bot API 10.4), render.py, service.py, templates/*.html
-  db/                models.py, engine.py (SSL), fsm_storage.py (FSM в Postgres), migrations/
-certs/root.crt       корневой сертификат Yandex Cloud
+  db/                models.py, engine.py (подключение, опциональный SSL), fsm_storage.py (FSM в Postgres), migrations/
 fonts/               DejaVu Sans (кириллица для PDF)
 tests/
 ```
@@ -65,28 +65,43 @@ uv run pytest
 Чтобы гонять тесты на своей БД, задайте `TEST_DATABASE_URL`. Тесты виджетов, которые проверяют JS, требуют Node.js;
 без него они пропускаются.
 
-## Yandex Managed PostgreSQL
+## База данных
 
-Требование 152-ФЗ (локализация): все ПДн, включая незавершённые анкеты (FSM), лежат только в этой БД.
-Поэтому FSM хранится в Postgres, а не в Redis на Railway.
+PostgreSQL берётся из плагина Postgres в том же проекте Railway. В переменных сервиса бота задайте
+`DATABASE_URL=${{Postgres.DATABASE_URL}}` (внутренний адрес по приватной сети Railway). Подходят схемы
+`postgresql://` и `postgres://`.
 
-1. Кластер PostgreSQL 16 в Yandex Cloud. В настройках хоста включите **публичный доступ**: у Railway нет статичных IP.
-2. В группе безопасности откройте входящий TCP 6432.
-3. Создайте БД и пользователя, затем соберите строку:
-   `postgresql://<user>:<pass>@<host>.mdb.yandexcloud.net:6432/<db>?sslmode=verify-full`
-   (FQDN хоста указан на странице кластера: для verify-full имя должно совпадать с сертификатом).
-4. Корневой сертификат положите в `certs/root.crt`:
+FSM (незаконченные анкеты с ФИО и телефоном) хранится в этой же базе, а не в Redis: все ПДн в одном месте,
+и перенос базы переносит всё.
+
+SSL опционален:
+- `PG_SSL_ROOT_CERT` задан: подключение с проверкой цепочки и имени хоста (как `sslmode=verify-full`) по этому сертификату;
+- `PG_SSL_ROOT_CERT` пустой: без своего сертификата, действует `sslmode` из `DATABASE_URL`
+  (`disable`, `require`, …; без параметра asyncpg использует `prefer`).
+
+Кэш подготовленных выражений asyncpg отключён, поэтому бот работает и через пулеры соединений (pgbouncer и т. п.).
+
+## Перенос базы
+
+1. Остановить бота (чтобы во время копирования не появлялись новые регистрации).
+2. Снять дамп со старой базы:
    ```bash
-   curl -fsSL https://storage.yandexcloud.net/cloud-certs/CA.pem -o certs/root.crt
+   pg_dump --format=custom --no-owner --no-acl "$OLD_DATABASE_URL" -f vitalis.dump
    ```
-   и задайте `PG_SSL_ROOT_CERT=certs/root.crt`. Бот проверяет и цепочку, и имя хоста.
-5. Перед кластером стоит пулер (Odyssey, порт 6432). В коде отключён кэш подготовленных выражений asyncpg,
-   поэтому бот работает с любым режимом пулинга.
+3. Восстановить в новую (пустую) базу:
+   ```bash
+   pg_restore --no-owner --no-acl --dbname="$NEW_DATABASE_URL" vitalis.dump
+   ```
+4. Поменять `DATABASE_URL` (и при необходимости `PG_SSL_ROOT_CERT`) на новые и запустить бота.
+   `alembic upgrade head` при старте ничего не сделает: версия схемы приехала вместе с дампом.
+
+`TICKET_HMAC_SECRET` переносится как есть, иначе QR выданных билетов перестанут проходить проверку.
 
 ## Деплой на Railway
 
 1. New Project → Deploy from GitHub repo → `vitalis-bot`.
-2. Variables: всё из `.env.example`.
+2. Добавьте в проект плагин Postgres. Variables сервиса бота: всё из `.env.example`,
+   `DATABASE_URL=${{Postgres.DATABASE_URL}}`.
 3. Сборка и старт описаны в `railway.json`: `alembic upgrade head && python -m bot`, одна реплика.
    Вторая реплика не нужна: long polling допускает только один процесс на токен. Напоминания защищены от
    дублей и при кратком перекрытии во время деплоя.

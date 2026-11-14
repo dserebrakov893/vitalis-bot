@@ -1,4 +1,4 @@
-"""FSM-хранилище aiogram в PostgreSQL. Переживает рестарты Railway и держит ПДн анкеты в РФ."""
+"""FSM-хранилище aiogram в PostgreSQL: переживает рестарты контейнера, ПДн анкеты лежат в той же БД."""
 from __future__ import annotations
 
 from typing import Any, Mapping

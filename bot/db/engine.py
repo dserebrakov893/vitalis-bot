@@ -1,4 +1,8 @@
-"""Подключение к PostgreSQL (Yandex Managed PostgreSQL, порт 6432, sslmode=verify-full)."""
+"""Подключение к PostgreSQL. Провайдер не важен: всё задаётся строкой DATABASE_URL.
+
+SSL опционален: если задан PG_SSL_ROOT_CERT, подключаемся с проверкой как sslmode=verify-full по этому
+сертификату. Если не задан, работает sslmode из DATABASE_URL (по умолчанию asyncpg: prefer).
+"""
 from __future__ import annotations
 
 import ssl
@@ -12,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def build_async_url(database_url: str) -> tuple[str, str | None]:
-    """postgresql://... → postgresql+asyncpg://... без sslmode (asyncpg его не понимает).
+    """postgresql:// или postgres:// → postgresql+asyncpg://... без sslmode (его передаём отдельно).
 
     Возвращает (url, sslmode)."""
     parts = urlsplit(database_url)
@@ -22,31 +26,32 @@ def build_async_url(database_url: str) -> tuple[str, str | None]:
     return urlunsplit((scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)), sslmode
 
 
-def build_ssl_context(root_cert: str, sslmode: str | None) -> ssl.SSLContext | None:
-    if sslmode == "disable" or (not root_cert and sslmode is None):
-        return None
-    cert_path = Path(root_cert)
-    if not cert_path.is_absolute():
-        cert_path = ROOT / cert_path
-    ctx = ssl.create_default_context(cafile=str(cert_path))
-    # verify-full: проверяем и цепочку, и имя хоста
-    ctx.check_hostname = True
-    ctx.verify_mode = ssl.CERT_REQUIRED
-    return ctx
+def build_ssl(root_cert: str, sslmode: str | None) -> ssl.SSLContext | str | None:
+    """Что передать в asyncpg как ssl: контекст verify-full, режим из URL или None (по умолчанию)."""
+    if root_cert:
+        cert_path = Path(root_cert)
+        if not cert_path.is_absolute():
+            cert_path = ROOT / cert_path
+        ctx = ssl.create_default_context(cafile=str(cert_path))
+        # verify-full: проверяем и цепочку, и имя хоста
+        ctx.check_hostname = True
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        return ctx
+    return sslmode  # disable / prefer / require / verify-ca / verify-full (системные CA) или None
 
 
 def make_engine(database_url: str, root_cert: str = "") -> AsyncEngine:
     url, sslmode = build_async_url(database_url)
     connect_args: dict = {
-        # Yandex ставит перед кластером Odyssey (пулер). В режиме transaction
-        # кэш подготовленных выражений asyncpg ломается, поэтому выключаем его.
+        # За многими managed-провайдерами стоит пулер (pgbouncer/Odyssey). В режиме transaction
+        # кэш подготовленных выражений asyncpg ломается, поэтому выключаем его на любом провайдере.
         "statement_cache_size": 0,
         "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
         "server_settings": {"timezone": "UTC"},
     }
-    ctx = build_ssl_context(root_cert, sslmode)
-    if ctx is not None:
-        connect_args["ssl"] = ctx
+    ssl_arg = build_ssl(root_cert, sslmode)
+    if ssl_arg is not None:
+        connect_args["ssl"] = ssl_arg
     return create_async_engine(
         url,
         connect_args=connect_args,

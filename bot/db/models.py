@@ -112,7 +112,7 @@ class Registration(Base):
 
 
 class FsmState(Base):
-    """Хранилище FSM aiogram. Лежит в той же БД в РФ: в анкете есть ПДн (152-ФЗ)."""
+    """Хранилище FSM aiogram. В той же БД, что и остальные ПДн: анкета не уходит в сторонний Redis."""
 
     __tablename__ = "fsm_state"
 
