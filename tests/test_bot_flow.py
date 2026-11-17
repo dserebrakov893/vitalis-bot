@@ -195,7 +195,7 @@ async def test_bottom_keyboard(env, sessionmaker):
 
     def has_kb(params):
         rm = params.get("reply_markup") or {}
-        return [[b["text"] for b in row] for row in rm.get("keyboard", [])] == [[t.MENU_EVENT, t.MENU_TICKET], [t.MENU_CANCEL]]
+        return [[b["text"] for b in row] for row in rm.get("keyboard", [])] == [[t.MENU_EVENT, t.MENU_TICKET], [t.MENU_FEEDBACK, t.MENU_SUPPORT], [t.MENU_CANCEL]]
 
     await send(text_update(UID, "/start"))
     assert "DeleteMessage" not in session.names()

@@ -133,7 +133,7 @@ class Delivery:
                     chat_id,
                     ticket_text(user, event, reg),
                     reply_markup=kb.ticket_kb(
-                        event.id, calendar_url(event.title, event.starts_at, event.venue_text), event.venue_url
+                        event.id, calendar_url(event.title, event.starts_at, event.venue_text, event.ends_at), event.venue_url
                     ),
                     disable_web_page_preview=True,
                 ),

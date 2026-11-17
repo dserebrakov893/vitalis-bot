@@ -7,6 +7,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Index,
     DateTime,
     ForeignKey,
     Integer,
@@ -14,6 +15,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -73,6 +75,7 @@ class Event(Base):
     title: Mapped[str] = mapped_column(Text)
     speaker: Mapped[str] = mapped_column(Text)
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # пусто = начало + 3 часа
     venue_text: Mapped[str | None] = mapped_column(Text)
     venue_url: Mapped[str | None] = mapped_column(Text)
     seats: Mapped[int] = mapped_column(Integer)
@@ -109,6 +112,31 @@ class Registration(Base):
 
     user: Mapped[User] = relationship(back_populates="registrations")
     event: Mapped[Event] = relationship()
+
+
+class Feedback(Base):
+    """Отзывы: о встрече (одна запись на человека и встречу) и о клубе в целом (сколько угодно)."""
+
+    __tablename__ = "feedback"
+    __table_args__ = (
+        CheckConstraint("kind in ('event','club')", name="feedback_kind"),
+        CheckConstraint("score is null or score between 1 and 5", name="feedback_score"),
+        Index("uq_feedback_event_user", "event_id", "user_id", unique=True,
+              postgresql_where=text("kind = 'event'")),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    event_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(Text)
+    score: Mapped[int | None] = mapped_column(SmallInteger)
+    attended: Mapped[bool | None] = mapped_column(Boolean)  # False: «Не смог прийти»
+    tags: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")
+    category: Mapped[str | None] = mapped_column(Text)  # для отзывов о клубе
+    comment: Mapped[str | None] = mapped_column(Text)
+    next_topic: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = _ts(onupdate=func.now())
 
 
 class FsmState(Base):

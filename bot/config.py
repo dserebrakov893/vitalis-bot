@@ -39,6 +39,8 @@ class Settings:
     smtp_password: str = ""
     smtp_from: str = ""
     widgets_enabled: bool = True
+    support_username: str = "meine_nika"
+    support_chat_id: int | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -58,6 +60,9 @@ class Settings:
             smtp_password=e("SMTP_PASSWORD", ""),
             smtp_from=e("SMTP_FROM", ""),
             widgets_enabled=_bool(e("WIDGETS_ENABLED"), True),
+            # Куда падают вопросы из «Поддержки». Аккаунт должен хотя бы раз нажать /start в боте.
+            support_username=(e("SUPPORT_USERNAME") or "meine_nika").lstrip("@"),
+            support_chat_id=int(e("SUPPORT_CHAT_ID")) if (e("SUPPORT_CHAT_ID") or "").strip() else None,
         )
 
     def validate_for_run(self) -> None:

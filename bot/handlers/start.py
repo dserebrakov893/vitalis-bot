@@ -164,3 +164,17 @@ async def menu_cancel(message: Message, sm: async_sessionmaker) -> None:
     from bot.handlers.user_commands import ask_cancel
 
     await ask_cancel(message.answer, sm, message.from_user.id)
+
+
+@router.message(F.text == t.MENU_FEEDBACK)
+async def menu_feedback(message: Message, bot: Bot, state: FSMContext, sm: async_sessionmaker) -> None:
+    from bot.handlers.feedback import start_feedback
+
+    await start_feedback(bot, message.chat.id, message.from_user.id, state, sm)
+
+
+@router.message(F.text == t.MENU_SUPPORT)
+async def menu_support(message: Message, state: FSMContext) -> None:
+    from bot.handlers.support import start_support
+
+    await start_support(message, state)

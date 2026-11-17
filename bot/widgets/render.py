@@ -71,7 +71,7 @@ def event_card_html(event: Event) -> str:
 
 def ticket_html(event: Event) -> str:
     """HTML билета общий для всех участников встречи; имя и номер приходят в chat_data."""
-    cal = calendar_url_short(event.starts_at)
+    cal = calendar_url_short(event.starts_at, event.ends_at)
     if len(cal) > 256 or not cal.startswith("https://"):
         raise ValueError("calendar url is not acceptable for openLink")
     return check_size(

@@ -10,39 +10,51 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from typing import Callable
 from datetime import datetime, timedelta
 from html import escape
 
 from aiogram.exceptions import TelegramForbiddenError
-from sqlalchemy import and_, select, update
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from bot import keyboards as kb
+from bot import texts as t
 from bot.db.models import Event, Registration
-from bot.formatting import fmt_time
+from bot.formatting import EVENT_DURATION, event_end, fmt_time
 from bot.services.delivery import SEND_DELAY, Delivery, event_details
 from bot.services.registration import utcnow
 
 log = logging.getLogger(__name__)
 
 TICK_SECONDS = 60
-FEEDBACK_AFTER = timedelta(hours=3)
+FEEDBACK_AFTER_END = timedelta(minutes=30)  # опрос через 30 минут после окончания встречи
 FEEDBACK_WINDOW = timedelta(days=2)  # не просим оценку, если бот лежал дольше
+# Окончание встречи в SQL: ends_at, а если не задано, начало + 3 часа
+EVENT_END_SQL = func.coalesce(Event.ends_at, Event.starts_at + EVENT_DURATION)
 
 
 @dataclass(frozen=True)
 class Stage:
     flag: str
-    offset: timedelta  # относительно starts_at
-    until: timedelta  # после этого момента этап пропускаем
+    due: Callable  # SQL-выражение момента отправки
+    late: Callable[[Event], datetime]  # после этого момента этап пропускаем
+    base: Callable[[Event], datetime]  # момент этапа (для проверки «записался позже»)
+
+
+def _feedback_at(e: Event) -> datetime:
+    return event_end(e) + FEEDBACK_AFTER_END
 
 
 STAGES = (
-    Stage("reminded_24h", -timedelta(hours=24), -timedelta(hours=2)),
-    Stage("reminded_2h", -timedelta(hours=2), timedelta(0)),
-    Stage("live_sent", timedelta(0), FEEDBACK_AFTER),
-    Stage("feedback_sent", FEEDBACK_AFTER, FEEDBACK_AFTER + FEEDBACK_WINDOW),
+    Stage("reminded_24h", lambda: Event.starts_at - timedelta(hours=24),
+          lambda e: e.starts_at - timedelta(hours=2), lambda e: e.starts_at - timedelta(hours=24)),
+    Stage("reminded_2h", lambda: Event.starts_at - timedelta(hours=2),
+          lambda e: e.starts_at, lambda e: e.starts_at - timedelta(hours=2)),
+    Stage("live_sent", lambda: Event.starts_at, _feedback_at, lambda e: e.starts_at),
+    Stage("feedback_sent", lambda: EVENT_END_SQL + FEEDBACK_AFTER_END,
+          lambda e: _feedback_at(e) + FEEDBACK_WINDOW, _feedback_at),
 )
 
 
@@ -67,11 +79,6 @@ def text_2h(event: Event) -> str:
     return "\n".join(lines)
 
 
-FEEDBACK_TEXT = (
-    "<b>Спасибо, что пришёл на встречу!</b>\n\n"
-    "Оцени её от 1 до 5. Так мы поймём, что сделать лучше в следующий раз."
-)
-RATED_TEXT = "Спасибо за оценку!"
 
 
 class Reminders:
@@ -103,7 +110,7 @@ class Reminders:
                         .where(
                             Registration.state == "registered",
                             col.is_(False),
-                            Event.starts_at + stage.offset <= now,
+                            stage.due() <= now,
                         )
                         .order_by(Registration.id)
                     )
@@ -118,9 +125,9 @@ class Reminders:
                 event = reg.event
                 if not await self._claim(reg.id, stage.flag):
                     continue  # уже обработано другим процессом
-                late = now >= event.starts_at + stage.until
+                late = now >= stage.late(event)
                 # Записался уже после момента напоминания: билет он только что получил, текст не шлём
-                fresh = stage.flag in ("reminded_24h", "reminded_2h") and reg.created_at > event.starts_at + stage.offset
+                fresh = stage.flag in ("reminded_24h", "reminded_2h") and reg.created_at > stage.base(event)
                 if late or (fresh and stage.flag == "reminded_24h"):
                     continue  # этап пропущен (бот лежал или человек записался позже), флаг остаётся
                 try:
@@ -157,7 +164,8 @@ class Reminders:
         elif flag == "feedback_sent":
             if widgets is not None:
                 await widgets.set_ticket_status(reg, "done", reg.user)
-            await self.bot.send_message(uid, FEEDBACK_TEXT, reply_markup=kb.rating_kb(event.id))
+            # тот же опрос открывается и по кнопке «Отзыв» (bot/handlers/feedback.py)
+            await self.bot.send_message(uid, t.fb_rate_text(event.title), reply_markup=kb.rating_kb(event.id))
 
     async def run_forever(self) -> None:
         log.info("reminders loop started")
@@ -167,16 +175,3 @@ class Reminders:
             except Exception:  # noqa: BLE001
                 log.exception("reminders tick failed")
             await asyncio.sleep(TICK_SECONDS)
-
-
-async def save_rating(sm: async_sessionmaker, user_id: int, event_id: int, score: int) -> Registration | None:
-    if not 1 <= score <= 5:
-        return None
-    async with sm() as s, s.begin():
-        res = await s.execute(
-            update(Registration)
-            .where(and_(Registration.user_id == user_id, Registration.event_id == event_id))
-            .values(feedback_score=score)
-            .returning(Registration)
-        )
-        return res.scalar_one_or_none()

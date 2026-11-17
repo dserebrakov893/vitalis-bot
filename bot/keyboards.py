@@ -17,6 +17,7 @@ def main_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=t.MENU_EVENT), KeyboardButton(text=t.MENU_TICKET)],
+            [KeyboardButton(text=t.MENU_FEEDBACK), KeyboardButton(text=t.MENU_SUPPORT)],
             [KeyboardButton(text=t.MENU_CANCEL)],
         ],
         resize_keyboard=True,
@@ -98,7 +99,41 @@ def delete_confirm_kb() -> InlineKeyboardMarkup:
 
 
 def rating_kb(event_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[_ib(str(i), f"rate:{event_id}:{i}") for i in range(1, 6)]])
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_ib(str(i), f"fb:r:{event_id}:{i}") for i in range(1, 6)],
+            [_ib(t.FB_ABSENT_BTN, f"fb:r:{event_id}:0")],
+        ]
+    )
+
+
+def fb_choose_kb(event_id: int, event_label: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[_ib(event_label, f"fb:ev:{event_id}")], [_ib(t.FB_CLUB_BTN, "fb:club")]]
+    )
+
+
+def fb_already_kb(event_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[_ib(t.FB_RERATE_BTN, f"fb:rerate:{event_id}")],
+                         [_ib(t.FB_ADD_COMMENT_BTN, f"fb:addc:{event_id}")]]
+    )
+
+
+def fb_tags_kb(options: list[tuple[str, str]], selected: list[str]) -> InlineKeyboardMarkup:
+    rows = [[_ib(("✓ " if code in selected else "") + label, f"fb:t:{code}")] for code, label in options]
+    rows.append([_ib(t.FB_DONE_BTN, "fb:td"), _ib(t.FB_SKIP, "fb:ts")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def fb_skip_kb(step: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[_ib(t.FB_SKIP, f"fb:skip:{step}")]])
+
+
+def fb_club_kb(categories: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+    rows = [[_ib(label, f"fbc:{code}")] for code, label in categories]
+    rows.append([_ib(t.FB_CANCEL_BTN, "fbc:cancel")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def reminder_kb(event_id: int, venue_url: str | None) -> InlineKeyboardMarkup:

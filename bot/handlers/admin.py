@@ -5,14 +5,16 @@ import asyncio
 import logging
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command, CommandObject, Filter
+from datetime import datetime
+
+from aiogram.filters import Command, CommandObject, Filter, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from bot.config import BOT_USERNAME, settings
+from bot.config import BOT_USERNAME, MSK, settings
 from bot.db.models import Registration, User
 from bot.services import admin as adm
 from bot.services import registration as regs
@@ -223,4 +225,183 @@ async def cb_bc_cancel(call: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("bc:"))
 async def cb_bc_stale(call: CallbackQuery) -> None:
+    await call.answer("Эта кнопка уже не активна.")
+
+
+# ---------- отзывы ----------
+
+@router.message(Command("feedback"))
+async def cmd_feedback(message: Message, command: CommandObject, sm: async_sessionmaker) -> None:
+    data, name = await adm.export_feedback_csv(sm, _event_arg(command))
+    log.info("feedback export by admin %s", message.from_user.id)
+    await message.answer_document(
+        BufferedInputFile(data, filename=name),
+        caption="Отзывы: о встречах и о клубе. CSV для Excel, разделитель «;». /feedback <id встречи> — только одна встреча.",
+    )
+
+
+# ---------- новая встреча ----------
+
+class EventNew(StatesGroup):
+    title = State()
+    speaker = State()
+    starts_at = State()
+    ends_at = State()
+    venue_text = State()
+    venue_url = State()
+    seats = State()
+    limit = State()
+    confirm = State()
+
+
+NEW_STEPS = [
+    (EventNew.title, "Шаг 1 из 8. Название встречи, например: <i>Встреча с Анной Ивановой</i>"),
+    (EventNew.speaker, "Шаг 2 из 8. Спикер полностью: имя и кто он, например: <i>Анна Иванова, CEO компании «Х»</i>"),
+    (EventNew.starts_at, "Шаг 3 из 8. Дата и время начала по Москве: <i>ДД.ММ.ГГГГ ЧЧ:ММ</i>"),
+    (EventNew.ends_at, "Шаг 4 из 8. Время окончания: <i>ЧЧ:ММ</i>. Опрос участникам уйдёт через 30 минут после него"),
+    (EventNew.venue_text, "Шаг 5 из 8. Место: название площадки и адрес"),
+    (EventNew.venue_url, "Шаг 6 из 8. Ссылка на карту (https://…) или «-», если не нужна"),
+    (EventNew.seats, "Шаг 7 из 8. Сколько мест в зале"),
+    (EventNew.limit, "Шаг 8 из 8. Сколько регистраций принимать (с запасом на неявку) или «-»: тогда мест × 1,25"),
+]
+CANCEL_WORDS = {"отмена", "стоп", "cancel"}
+
+
+def _new_cancel_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="en:cancel")]])
+
+
+async def _ask_new(message: Message, state: FSMContext, idx: int) -> None:
+    st, prompt = NEW_STEPS[idx]
+    await state.set_state(st)
+    await message.answer(prompt, reply_markup=_new_cancel_kb())
+
+
+@router.message(Command("event_new"))
+async def cmd_event_new(message: Message, state: FSMContext) -> None:
+    await state.set_state(None)
+    await state.update_data(en={})
+    await message.answer("<b>Новая встреча</b>\n\nОтвечай по шагам. Отменить можно в любой момент кнопкой или словом «отмена».")
+    await _ask_new(message, state, 0)
+
+
+@router.callback_query(F.data == "en:cancel")
+async def cb_event_new_cancel(call: CallbackQuery, state: FSMContext) -> None:
+    await call.answer()
+    current = await state.get_state()
+    if current and current.startswith("EventNew:"):
+        await state.set_state(None)
+    await call.message.answer("Создание встречи отменено.")
+
+
+def _parse_new(st: State, raw: str, data: dict):
+    raw = raw.strip()
+    if st == EventNew.title:
+        if not 3 <= len(raw) <= 120:
+            raise adm.BadValue("Название: от 3 до 120 символов")
+        return raw
+    if st == EventNew.speaker:
+        if not 3 <= len(raw) <= 300:
+            raise adm.BadValue("Спикер: от 3 до 300 символов")
+        return raw
+    if st == EventNew.starts_at:
+        value = adm.parse_field_value("starts_at", raw)
+        if value <= regs.utcnow():
+            raise adm.BadValue("Это время уже прошло")
+        return value
+    if st == EventNew.ends_at:
+        try:
+            end_t = datetime.strptime(raw, "%H:%M").time()
+        except ValueError as e:
+            raise adm.BadValue("Время окончания: ЧЧ:ММ, например 20:00") from e
+        start = data["starts_at"].astimezone(MSK)
+        end = datetime.combine(start.date(), end_t, tzinfo=MSK)
+        if end <= start:
+            raise adm.BadValue("Окончание должно быть позже начала")
+        return end
+    if st == EventNew.venue_text:
+        return adm.parse_field_value("venue_text", raw)
+    if st == EventNew.venue_url:
+        return adm.parse_field_value("venue_url", raw)
+    if st == EventNew.seats:
+        if not raw.isdigit() or not 1 <= int(raw) <= 10000:
+            raise adm.BadValue("Число мест: целое число от 1")
+        return int(raw)
+    if st == EventNew.limit:
+        if raw in ("-", "—"):
+            return round(data["seats"] * 1.25)
+        if not raw.isdigit() or int(raw) < data["seats"]:
+            raise adm.BadValue(f"Лимит регистраций: целое число не меньше {data['seats']} (мест в зале)")
+        return int(raw)
+    raise adm.BadValue("unknown step")
+
+
+@router.message(StateFilter(*[st for st, _ in NEW_STEPS]), F.text)
+async def on_event_new_step(message: Message, state: FSMContext) -> None:
+    if message.text.strip().lower() in CANCEL_WORDS:
+        await state.set_state(None)
+        await message.answer("Создание встречи отменено.")
+        return
+    current = await state.get_state()
+    idx = next(i for i, (st, _) in enumerate(NEW_STEPS) if st.state == current)
+    st = NEW_STEPS[idx][0]
+    data = dict((await state.get_data()).get("en") or {})
+    restored = {k: datetime.fromisoformat(v) if k in ("starts_at", "ends_at") else v for k, v in data.items()}
+    try:
+        value = _parse_new(st, message.text, restored)
+    except adm.BadValue as e:
+        await message.answer(str(e))
+        return
+    key = st.state.split(":", 1)[1]
+    key = "registration_limit" if key == "limit" else key
+    data[key] = value.isoformat() if isinstance(value, datetime) else value
+    await state.update_data(en=data)
+    if idx + 1 < len(NEW_STEPS):
+        await _ask_new(message, state, idx + 1)
+        return
+    await state.set_state(EventNew.confirm)
+    start = datetime.fromisoformat(data["starts_at"]).astimezone(MSK)
+    end = datetime.fromisoformat(data["ends_at"]).astimezone(MSK)
+    from html import escape
+
+    await message.answer(
+        "<b>Проверь встречу</b>\n\n"
+        f"<b>Название:</b> {escape(data['title'])}\n"
+        f"<b>Спикер:</b> {escape(data['speaker'])}\n"
+        f"<b>Когда:</b> {start:%d.%m.%Y}, {start:%H:%M}–{end:%H:%M} МСК\n"
+        f"<b>Где:</b> {escape(data['venue_text'])}\n"
+        f"<b>Карта:</b> {escape(data.get('venue_url') or '—')}\n"
+        f"<b>Мест:</b> {data['seats']}, регистраций: {data['registration_limit']}\n\n"
+        "После создания регистрация откроется сразу. Бот показывает ближайшую встречу, поэтому эту участники "
+        "увидят, когда пройдут более ранние.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="Создать", callback_data="en:create"),
+            InlineKeyboardButton(text="Отмена", callback_data="en:cancel"),
+        ]]),
+        disable_web_page_preview=True,
+    )
+
+
+@router.callback_query(F.data == "en:create", EventNew.confirm)
+async def cb_event_new_create(call: CallbackQuery, state: FSMContext, sm: async_sessionmaker) -> None:
+    data = dict((await state.get_data()).get("en") or {})
+    await state.set_state(None)  # сразу: второй тап по «Создать» уже не пройдёт фильтр состояния
+    await call.answer()
+    for k in ("starts_at", "ends_at"):
+        data[k] = datetime.fromisoformat(data[k])
+    ev = await adm.create_event(sm, data)
+    log.info("admin %s created event %s", call.from_user.id, ev.id)
+    try:
+        await call.message.edit_reply_markup(reply_markup=None)
+    except Exception:  # noqa: BLE001
+        pass
+    await call.message.answer(
+        f"Встреча создана, id {ev.id}.\n\nНапоминания и опрос после неё будут отправлены автоматически.\n\n"
+        + await adm.event_info(sm, ev.id),
+        disable_web_page_preview=True,
+    )
+
+
+@router.callback_query(F.data == "en:create")
+async def cb_event_new_stale(call: CallbackQuery) -> None:
     await call.answer("Эта кнопка уже не активна.")

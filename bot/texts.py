@@ -52,12 +52,14 @@ BTN_GO = "Иду"
 MENU_EVENT = "📅 Ближайшая встреча"
 MENU_TICKET = "🎟 Мой билет"
 MENU_CANCEL = "🚫 Не смогу прийти"
+MENU_FEEDBACK = "💬 Отзыв"
+MENU_SUPPORT = "🆘 Поддержка"
 # старые подписи без эмодзи: у тех, кто уже видел клавиатуру, она остаётся до замены
 MENU_EVENT_ALIASES = (MENU_EVENT, "Ближайшая встреча")
 MENU_TICKET_ALIASES = (MENU_TICKET, "Мой билет")
 MENU_CANCEL_ALIASES = (MENU_CANCEL, "Не смогу прийти")
 CARD_LEAD = "Ближайшая встреча клуба 👇"
-MENU_BUTTONS = MENU_EVENT_ALIASES + MENU_TICKET_ALIASES + MENU_CANCEL_ALIASES
+MENU_BUTTONS = MENU_EVENT_ALIASES + MENU_TICKET_ALIASES + MENU_CANCEL_ALIASES + (MENU_FEEDBACK, MENU_SUPPORT)
 BTN_BACK = "← Назад"
 BTN_ADULT = "Мне 18+, согласен"
 BTN_MINOR = "Мне 17, родитель согласен"
@@ -225,3 +227,55 @@ DELETE_CONFIRM = (
 )
 DELETE_DONE = "Данные удалены."
 DELETE_KEPT = "Ничего не удаляли."
+
+
+# --- отзывы ---
+FB_CHOOSE = "<b>О чём хочешь написать?</b>"
+FB_CLUB_BTN = "О клубе в целом"
+FB_ABSENT_BTN = "Не смог прийти"
+FB_SKIP = "Пропустить"
+FB_DONE_BTN = "Готово"
+FB_RERATE_BTN = "Изменить оценку"
+FB_ADD_COMMENT_BTN = "Дописать комментарий"
+FB_CANCEL_BTN = "Отмена"
+
+
+def fb_rate_text(event_title: str) -> str:
+    return f"<b>Как тебе {escape(event_title[:1].lower() + event_title[1:])}?</b>\n\nОцени от 1 до 5."
+
+
+def fb_already_text(score: int | None, attended: bool | None) -> str:
+    if attended is False:
+        return "Ты отметил, что не смог прийти.\n\nМожно поставить оценку или дописать комментарий."
+    return f"Ты поставил встрече {score} из 5.\n\nМожно изменить оценку или дописать комментарий."
+
+
+FB_IMPROVE = "<b>Что нам улучшить?</b>\n\nМожно выбрать несколько пунктов, потом нажми «Готово»."
+FB_LIKED = "<b>Что понравилось больше всего?</b>\n\nМожно выбрать несколько пунктов, потом нажми «Готово»."
+FB_COMMENT = "<b>Хочешь добавить пару слов?</b>\n\nНапиши сообщением. Отзыв видят только организаторы."
+FB_COMMENT_ONLY = "<b>Напиши комментарий о встрече</b>\n\nОтзыв видят только организаторы."
+FB_NEXT = "<b>О чём или с кем провести следующую встречу?</b>\n\nНапиши тему или имя спикера."
+FB_THANKS = "Спасибо! Учтём, когда будем готовить следующую встречу."
+FB_ABSENT_THANKS = "Жаль, что не получилось. Спасибо, что ответил!\n\nАнонс следующей встречи пришлёт бот."
+FB_CLOSED = "Опрос по этой встрече уже закрыт."
+FB_TOO_LONG = "Получилось длинновато: до 1000 символов. Сократи, пожалуйста, и пришли ещё раз."
+FB_CLUB_CATEGORY = "<b>Отзыв о клубе</b>\n\nО чём хочешь написать?"
+FB_CLUB_TEXT = "Напиши сообщением, что хочешь передать организаторам."
+FB_CLUB_THANKS = "Спасибо! Передали организаторам."
+FB_CANCELLED = "Хорошо, отменили."
+
+
+# --- поддержка ---
+SUPPORT_ASK = (
+    "<b>Поддержка</b>\n\n"
+    "Напиши вопрос одним сообщением. Ответим здесь же, в чате с ботом."
+)
+SUPPORT_SENT = "Передали вопрос. Ответим здесь же, в этом чате."
+SUPPORT_UNAVAILABLE = (
+    "Поддержка сейчас недоступна.\n\n"
+    f"Напиши, пожалуйста, на {OPERATOR_EMAIL}"
+)
+SUPPORT_REPLY_TITLE = "<b>Ответ поддержки</b>"
+SUPPORT_REPLY_SENT = "Ответ отправлен."
+SUPPORT_REPLY_FAILED = "Не удалось отправить: человек заблокировал бота или удалил свои данные."
+SUPPORT_TEXT_ONLY = "Пока принимаем только текст. Опиши вопрос словами, пожалуйста."

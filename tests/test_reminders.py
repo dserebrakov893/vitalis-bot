@@ -8,7 +8,8 @@ from sqlalchemy import text, update
 from bot.db.models import Registration
 from bot.services import registration as reg
 from bot.services.delivery import Delivery
-from bot.services.reminders import FEEDBACK_TEXT, Reminders
+from bot import texts as t
+from bot.services.reminders import Reminders
 from bot.widgets.service import WidgetService
 from tests.fake_telegram import callback_update, make_bot
 from tests.factories import profile
@@ -20,7 +21,8 @@ H = timedelta(hours=1)
 @pytest_asyncio.fixture
 async def renv(sessionmaker, engine):
     async with engine.begin() as c:
-        await c.execute(text("UPDATE events SET starts_at=:t WHERE id=1"), {"t": T})
+        # встреча T … T+3ч, опрос в T+3ч30м
+        await c.execute(text("UPDATE events SET starts_at=:t, ends_at=:e WHERE id=1"), {"t": T, "e": T + 3 * H})
     bot, session = make_bot()
     widgets = WidgetService(bot, sessionmaker, autoflush=False)
     delivery = Delivery(bot, sessionmaker, widgets=widgets)
@@ -64,8 +66,11 @@ async def test_each_stage_exactly_once(renv, sessionmaker):
     assert _msgs(session) == [] and _statuses(session) == ["live", "live"]
 
     session.reset()
-    assert await rem.tick(T + 3 * H) == {"feedback_sent": 2}
-    assert [m["text"] for m in _msgs(session)] == [FEEDBACK_TEXT] * 2
+    assert await rem.tick(T + 3 * H + timedelta(minutes=29)) == {}  # через 29 минут после конца рано
+    assert await rem.tick(T + 3 * H + timedelta(minutes=30)) == {"feedback_sent": 2}
+    rate = [m for m in _msgs(session)]
+    assert [m["text"] for m in rate] == [t.fb_rate_text("Встреча с Семёном Покацким")] * 2
+    assert rate[0]["reply_markup"]["inline_keyboard"][1][0]["callback_data"] == "fb:r:1:0"  # «Не смог прийти»
     assert _statuses(session) == ["done", "done"]
 
     session.reset()
@@ -80,7 +85,7 @@ async def test_downtime_skips_stale_stages(renv):
     # бот лежал до T+1ч: напоминания за сутки и за 2 часа уже не нужны, билет сразу «live»
     assert await rem.tick(T + 1 * H) == {"live_sent": 2}
     assert _msgs(session) == []
-    assert await rem.tick(T + 3 * H) == {"feedback_sent": 2}
+    assert await rem.tick(T + 4 * H) == {"feedback_sent": 2}
 
 
 async def test_blocked_user_is_skipped_and_failure_retried(renv, sessionmaker):
@@ -114,19 +119,22 @@ async def test_late_registrant_gets_no_day_reminder(renv, sessionmaker, engine):
     assert [m["chat_id"] for m in _msgs(session)] == [1]
 
 
-async def test_rating_button(renv, sessionmaker):
+async def test_rating_button(renv, sessionmaker, engine):
     session, rem = renv
     from bot.app import build_dispatcher
     from tests import test_bot_flow
 
     await rem.tick(T + 1 * H)
-    await rem.tick(T + 3 * H)
+    await rem.tick(T + 4 * H)
     dp = test_bot_flow._DP.get("dp") or build_dispatcher(sessionmaker, rem.delivery)
     test_bot_flow._DP["dp"] = dp
     dp["sm"], dp["delivery"] = sessionmaker, rem.delivery
+    # отзыв принимают только после начала встречи: переносим её в прошлое
+    async with engine.begin() as c:
+        await c.execute(text("UPDATE events SET starts_at=now()-interval '4 hours', ends_at=now()-interval '1 hour'"))
     session.reset()
-    await dp.feed_update(rem.bot, callback_update(1, "rate:1:4"))
+    await dp.feed_update(rem.bot, callback_update(1, "fb:r:1:4"))
     assert (await _reg(sessionmaker, 1)).feedback_score == 4
-    assert "Твоя оценка: 4 из 5" in session.texts()[-1]
+    assert any("Твоя оценка: 4 из 5" in x for x in session.texts())
     chat = json.loads(session.params("EditMessageWidgetData")[0]["chat_data"])
     assert chat["s"] == "done" and chat["sc"] == 4

@@ -265,8 +265,9 @@ class WidgetService:
                 await self.answer(qid, '{"e":"no_ticket"}')
                 return
             score = int(data[5:])
-            async with self.sm() as s, s.begin():
-                await s.execute(update(Registration).where(Registration.id == reg.id).values(feedback_score=score))
+            from bot.services import feedback as fb
+
+            await fb.save_event_feedback(self.sm, user_id, reg.event_id, attended=True, score=score)
             await self.answer(qid, '{"ok":1}')
             reg.feedback_score = score
             await self.set_ticket_status(reg, reg.ticket_widget_status or "done")

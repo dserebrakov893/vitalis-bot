@@ -9,7 +9,11 @@ from bot.config import MSK
 MONTHS = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа",
           "сентября", "октября", "ноября", "декабря")
 WEEKDAYS = ("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье")
-EVENT_DURATION = timedelta(hours=3)
+EVENT_DURATION = timedelta(hours=3)  # если у встречи не указано время окончания
+
+
+def event_end(event) -> datetime:
+    return event.ends_at or event.starts_at + EVENT_DURATION
 
 
 def msk(dt: datetime) -> datetime:
@@ -45,26 +49,28 @@ def first_name(full_name: str | None, fallback: str | None = None) -> str:
     return fallback or "друг"
 
 
-def _gcal_dates(starts_at: datetime) -> str:
+def _gcal_dates(starts_at: datetime, ends_at: datetime | None = None) -> str:
     fmt = "%Y%m%dT%H%M%SZ"
     start = starts_at.astimezone(timezone.utc)
-    return f"{start.strftime(fmt)}/{(start + EVENT_DURATION).strftime(fmt)}"
+    end = (ends_at or starts_at + EVENT_DURATION).astimezone(timezone.utc)
+    return f"{start.strftime(fmt)}/{end.strftime(fmt)}"
 
 
-def calendar_url(title: str, starts_at: datetime, location: str | None = None) -> str:
+def calendar_url(title: str, starts_at: datetime, location: str | None = None,
+                 ends_at: datetime | None = None) -> str:
     """Ссылка Google Calendar для inline-кнопки (без ограничения длины)."""
     url = (
         "https://calendar.google.com/calendar/render?action=TEMPLATE"
-        f"&text={quote('Vitalis · ' + title)}&dates={_gcal_dates(starts_at)}"
+        f"&text={quote('Vitalis · ' + title)}&dates={_gcal_dates(starts_at, ends_at)}"
     )
     if location:
         url += "&location=" + quote(location)
     return url
 
 
-def calendar_url_short(starts_at: datetime) -> str:
+def calendar_url_short(starts_at: datetime, ends_at: datetime | None = None) -> str:
     """Для openLink в виджете: только https и не длиннее 256 символов, поэтому без кириллицы и адреса."""
     return (
         "https://calendar.google.com/calendar/render?action=TEMPLATE"
-        f"&text=Vitalis&dates={_gcal_dates(starts_at)}"
+        f"&text=Vitalis&dates={_gcal_dates(starts_at, ends_at)}"
     )

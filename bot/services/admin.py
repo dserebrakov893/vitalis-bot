@@ -4,20 +4,22 @@ from __future__ import annotations
 import csv
 import io
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, time
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot import texts as t
 from bot.config import MSK
-from bot.db.models import Event, Registration, User
+from bot.db.models import Event, Feedback, Registration, User
+from bot.formatting import event_end
+from bot.services.feedback import CATEGORY_LABELS, TAG_LABELS, survey_at
 from bot.services import registration as regs
 
 STATUS_LABELS = dict(t.STATUSES)
 INTEREST_LABELS = dict(t.INTERESTS)
 PROJECT_LABELS = dict(t.PROJECT_STAGES)
-EDITABLE_FIELDS = ("venue_text", "venue_url", "is_open", "registration_limit", "starts_at")
+EDITABLE_FIELDS = ("venue_text", "venue_url", "is_open", "registration_limit", "starts_at", "ends_at")
 
 
 async def admin_event(session: AsyncSession, event_id: int | None = None) -> Event | None:
@@ -58,7 +60,10 @@ async def stats_text(sm: async_sessionmaker, event_id: int | None = None) -> str
     interests = Counter(i for _, u in active for i in (u.interests or []))
     news = sum(1 for _, u in active if u.newsletter_opt_in)
     minors = sum(1 for _, u in active if u.age_group == "17_with_parent")
-    scores = [r.feedback_score for r, _ in rows if r.feedback_score]
+    async with sm() as s:
+        fbs = (await s.execute(select(Feedback).where(Feedback.kind == "event", Feedback.event_id == ev.id))).scalars().all()
+        club_count = (await s.execute(select(func.count()).where(Feedback.kind == "club"))).scalar_one()
+    scores = [f.score for f in fbs if f.score]
     lines = [
         f"<b>{ev.title}</b> (id {ev.id}), {ev.starts_at.astimezone(MSK):%d.%m %H:%M} МСК",
         f"Зарегистрировано: {states['registered']} из {ev.registration_limit} (мест в зале {ev.seats})",
@@ -69,11 +74,13 @@ async def stats_text(sm: async_sessionmaker, event_id: int | None = None) -> str
     ]
     if scores:
         lines.append(f"Оценка встречи: {sum(scores) / len(scores):.1f} ({len(scores)} оценок)")
+    feedback_lines = _feedback_lines(fbs, scores, club_count)
     lines += [
         "\n<b>Источники</b>", _top(sources),
         "\n<b>Вузы</b>", _top(unis),
         "\n<b>Статусы</b>", _top(statuses, STATUS_LABELS),
         "\n<b>Интересы</b>", _top(interests, INTEREST_LABELS),
+        *feedback_lines,
     ]
     from html import escape
 
@@ -189,6 +196,8 @@ async def event_info(sm: async_sessionmaker, event_id: int | None = None) -> str
             f"<b>id {ev.id}</b>: {escape(ev.title)}",
             f"Спикер: {escape(ev.speaker)}",
             f"starts_at: {ev.starts_at.astimezone(MSK):%d.%m.%Y %H:%M} МСК",
+            f"ends_at: {event_end(ev).astimezone(MSK):%d.%m.%Y %H:%M} МСК" + ("" if ev.ends_at else " (не задано, начало + 3 ч)"),
+            f"опрос после встречи: {survey_at(ev).astimezone(MSK):%d.%m %H:%M} МСК",
             f"venue_text: {escape(ev.venue_text or '—')}",
             f"venue_url: {escape(ev.venue_url or '—')}",
             f"seats: {ev.seats}",
@@ -198,7 +207,7 @@ async def event_info(sm: async_sessionmaker, event_id: int | None = None) -> str
             f"shared_widget_id: {ev.shared_widget_id or '—'}",
             "",
             "Изменить: /event_set &lt;поле&gt; &lt;значение&gt;, поля: " + ", ".join(EDITABLE_FIELDS),
-            "starts_at в формате ДД.ММ.ГГГГ ЧЧ:ММ (МСК)",
+            "starts_at в формате ДД.ММ.ГГГГ ЧЧ:ММ (МСК), ends_at так же или просто ЧЧ:ММ",
         ]
     )
 
@@ -219,6 +228,15 @@ def parse_field_value(field: str, raw: str):
         if not raw.isdigit() or not 1 <= int(raw) <= 10000:
             raise BadValue("registration_limit: целое число от 1")
         return int(raw)
+    if field == "ends_at":
+        try:
+            return datetime.strptime(raw, "%d.%m.%Y %H:%M").replace(tzinfo=MSK)
+        except ValueError:
+            pass
+        try:
+            return datetime.strptime(raw, "%H:%M").time()  # день берём из начала встречи
+        except ValueError as e:
+            raise BadValue("ends_at: ЧЧ:ММ или ДД.ММ.ГГГГ ЧЧ:ММ по Москве") from e
     if field == "starts_at":
         try:
             return datetime.strptime(raw, "%d.%m.%Y %H:%M").replace(tzinfo=MSK)
@@ -238,9 +256,84 @@ def parse_field_value(field: str, raw: str):
 
 
 async def set_event_field(sm: async_sessionmaker, event_id: int, field: str, value) -> None:
+    if field == "ends_at" and isinstance(value, time):
+        async with sm() as s:
+            ev = await s.get(Event, event_id)
+        value = datetime.combine(ev.starts_at.astimezone(MSK).date(), value, tzinfo=MSK)
     values = {field: value}
     if field in ("venue_text", "starts_at"):
         # HTML карточки неизменяем: адрес и время в нём «зашиты», поэтому нужен новый shared-виджет
         values["shared_widget_id"] = None
     async with sm() as s, s.begin():
         await s.execute(update(Event).where(Event.id == event_id).values(**values))
+
+
+def _feedback_lines(fbs, scores, club_count: int) -> list[str]:
+    absent = sum(1 for f in fbs if f.attended is False)
+    dist = Counter(scores)
+    low = Counter(tag for f in fbs if f.score and f.score <= 3 for tag in f.tags)
+    high = Counter(tag for f in fbs if f.score and f.score >= 4 for tag in f.tags)
+    comments = sum(1 for f in fbs if f.comment)
+    topics = sum(1 for f in fbs if f.next_topic)
+    lines = ["\n<b>Отзывы о встрече</b>"]
+    if not fbs:
+        lines.append("  пока нет")
+    else:
+        lines.append("  Оценки: " + ", ".join(f"{n}★ — {dist.get(n, 0)}" for n in range(5, 0, -1)))
+        lines.append(f"  Не смогли прийти: {absent}")
+        lines.append(f"  Комментариев: {comments}, пожеланий на следующую встречу: {topics}")
+        if low:
+            lines += ["  Что улучшить:", _top(low, TAG_LABELS)]
+        if high:
+            lines += ["  Что понравилось:", _top(high, TAG_LABELS)]
+    lines.append(f"Отзывов о клубе всего: {club_count}")
+    lines.append("Все тексты: /feedback")
+    return lines
+
+
+FEEDBACK_COLUMNS = [
+    "kind", "event_id", "event_title", "full_name", "username", "telegram_id", "score", "attended",
+    "tags", "category", "comment", "next_topic", "created_at_msk", "updated_at_msk",
+]
+
+
+async def export_feedback_csv(sm: async_sessionmaker, event_id: int | None = None) -> tuple[bytes, str]:
+    """Все отзывы с ФИО (по решению организаторов отзывы не анонимные)."""
+    async with sm() as s:
+        q = select(Feedback, User, Event).join(User, Feedback.user_id == User.id).outerjoin(Event, Feedback.event_id == Event.id)
+        if event_id is not None:
+            q = q.where(Feedback.event_id == event_id)
+        rows = (await s.execute(q.order_by(Feedback.created_at))).all()
+    buf = io.StringIO()
+    writer = csv.writer(buf, delimiter=";", lineterminator="\r\n")
+    writer.writerow(FEEDBACK_COLUMNS)
+    for f, u, ev in rows:
+        writer.writerow([_safe_cell(v) for v in (
+            "о встрече" if f.kind == "event" else "о клубе",
+            f.event_id or "",
+            ev.title if ev else "",
+            u.full_name or u.tg_first_name or "",
+            u.username or "",
+            u.id,
+            f.score or "",
+            {True: "да", False: "нет", None: ""}[f.attended],
+            ", ".join(TAG_LABELS.get(x, x) for x in f.tags or []),
+            CATEGORY_LABELS.get(f.category, f.category or ""),
+            f.comment or "",
+            f.next_topic or "",
+            _msk(f.created_at),
+            _msk(f.updated_at),
+        )])
+    return buf.getvalue().encode("utf-8-sig"), f"vitalis_feedback_{datetime.now(MSK):%Y%m%d_%H%M}.csv"
+
+
+async def create_event(sm: async_sessionmaker, data: dict) -> Event:
+    async with sm() as s, s.begin():
+        ev = Event(
+            title=data["title"], speaker=data["speaker"], starts_at=data["starts_at"], ends_at=data["ends_at"],
+            venue_text=data["venue_text"], venue_url=data.get("venue_url"), seats=data["seats"],
+            registration_limit=data["registration_limit"], is_open=True,
+        )
+        s.add(ev)
+        await s.flush()
+        return ev
