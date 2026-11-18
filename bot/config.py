@@ -41,6 +41,8 @@ class Settings:
     widgets_enabled: bool = True
     support_username: str = "meine_nika"
     support_chat_id: int | None = None
+    webapp_url: str = ""  # публичный https-адрес сервиса, на нём открывается Mini App чекина
+    port: int | None = None  # порт веб-сервера; без него Mini App не запускается
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -63,6 +65,8 @@ class Settings:
             # Куда падают вопросы из «Поддержки». Аккаунт должен хотя бы раз нажать /start в боте.
             support_username=(e("SUPPORT_USERNAME") or "meine_nika").lstrip("@"),
             support_chat_id=int(e("SUPPORT_CHAT_ID")) if (e("SUPPORT_CHAT_ID") or "").strip() else None,
+            webapp_url=(e("WEBAPP_URL") or "").strip().rstrip("/"),
+            port=int(e("PORT")) if (e("PORT") or "").strip() else None,
         )
 
     def validate_for_run(self) -> None:

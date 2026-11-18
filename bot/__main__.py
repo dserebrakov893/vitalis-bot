@@ -35,10 +35,18 @@ async def main() -> None:
     dp = build_dispatcher(sm, delivery)
     await setup_bot_profile(bot)
     reminders_task = asyncio.create_task(Reminders(sm, delivery).run_forever())
+    web_runner = None
+    if settings.port:
+        from bot.handlers.admin import ADMIN_IDS
+        from bot.webapp.server import build_webapp, start_webapp
+
+        web_runner = await start_webapp(build_webapp(sm, settings.bot_token, lambda: ADMIN_IDS), settings.port)
     try:
         await dp.start_polling(bot, allowed_updates=ALLOWED_UPDATES)
     finally:
         reminders_task.cancel()
+        if web_runner is not None:
+            await web_runner.cleanup()
         await engine.dispose()
         await bot.session.close()
 

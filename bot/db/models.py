@@ -102,6 +102,7 @@ class Registration(Base):
     ticket_widget_status: Mapped[str | None] = mapped_column(Text)  # последний записанный статус виджета
     waitlisted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     checked_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    checked_in_by: Mapped[int | None] = mapped_column(BigInteger)  # Telegram ID проверяющего
     feedback_score: Mapped[int | None] = mapped_column(SmallInteger)
     reminded_24h: Mapped[bool] = mapped_column(Boolean, server_default="false")
     reminded_2h: Mapped[bool] = mapped_column(Boolean, server_default="false")
@@ -137,6 +138,35 @@ class Feedback(Base):
     next_topic: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = _ts(onupdate=func.now())
+
+
+class Checker(Base):
+    """Проверяющий на входе: доступ к Mini App чекина на одну встречу, истекает после неё."""
+
+    __tablename__ = "checkers"
+    __table_args__ = (UniqueConstraint("user_id", "event_id", name="uq_checker_user_event"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    event_id: Mapped[int] = mapped_column(Integer, ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    added_by: Mapped[int | None] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = _ts()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CheckerInvite(Base):
+    """Одноразовая ссылка-приглашение для проверяющего. Храним только хеш токена."""
+
+    __tablename__ = "checker_invites"
+
+    token_hash: Mapped[str] = mapped_column(Text, primary_key=True)
+    event_id: Mapped[int] = mapped_column(Integer, ForeignKey("events.id", ondelete="CASCADE"))
+    created_by: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = _ts()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_by: Mapped[int | None] = mapped_column(BigInteger)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class FsmState(Base):

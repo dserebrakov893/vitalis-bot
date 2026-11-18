@@ -67,6 +67,7 @@ async def stats_text(sm: async_sessionmaker, event_id: int | None = None) -> str
     lines = [
         f"<b>{ev.title}</b> (id {ev.id}), {ev.starts_at.astimezone(MSK):%d.%m %H:%M} МСК",
         f"Зарегистрировано: {states['registered']} из {ev.registration_limit} (мест в зале {ev.seats})",
+        f"Пришло: {sum(1 for r, _ in rows if r.state == 'registered' and r.checked_in_at)} из {states['registered']}",
         f"Лист ожидания: {states['waitlist']}",
         f"Отмены: {states['cancelled']}",
         f"Согласие на рассылку: {news} из {len(active)}",
@@ -154,7 +155,7 @@ async def guard_list(sm: async_sessionmaker, event_id: int | None = None) -> tup
             return "", []
         rows = (
             await s.execute(
-                select(User.full_name, Registration.ticket_no)
+                select(User.full_name, Registration.ticket_no, Registration.checked_in_at)
                 .join(User)
                 .where(Registration.event_id == ev.id, Registration.state == "registered")
             )
@@ -162,8 +163,10 @@ async def guard_list(sm: async_sessionmaker, event_id: int | None = None) -> tup
     rows = sorted(rows, key=lambda r: ((r[0] or "").replace("ё", "е").replace("Ё", "Е").lower(), r[1]))
     from html import escape
 
-    header = f"{escape(ev.title)}, {ev.starts_at.astimezone(MSK):%d.%m.%Y %H:%M} МСК. Всего: {len(rows)}"
-    return header, [f"{i}. {escape(name or '')} — билет №{no}" for i, (name, no) in enumerate(rows, 1)]
+    came = sum(1 for r in rows if r[2])
+    header = f"{escape(ev.title)}, {ev.starts_at.astimezone(MSK):%d.%m.%Y %H:%M} МСК. Всего: {len(rows)}, пришли: {came}"
+    return header, [f"{i}. {escape(name or '')} — билет №{no}" + (" ✓" if at else "")
+                    for i, (name, no, at) in enumerate(rows, 1)]
 
 
 def chunk_lines(header: str, lines: list[str], limit: int = 3800) -> list[str]:

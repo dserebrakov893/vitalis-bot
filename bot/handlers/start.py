@@ -63,7 +63,14 @@ async def open_bot(message: Message, state: FSMContext, sm: async_sessionmaker, 
 @router.message(CommandStart())
 async def cmd_start(message: Message, command: CommandObject, state: FSMContext, sm: async_sessionmaker,
                     delivery: Delivery) -> None:
-    if (command.args or "").strip() == "unsubscribe":
+    arg = (command.args or "").strip()
+    if arg.startswith("chk_"):
+        # приглашение проверяющего: не источник регистрации и не карточка встречи
+        from bot.handlers.checkin import redeem_from_start
+
+        await redeem_from_start(message, sm, arg[4:])
+        return
+    if arg == "unsubscribe":
         # ссылка на отписку из писем рассылки
         await regs.unsubscribe(sm, message.from_user.id)
         await message.answer(t.UNSUBSCRIBED)

@@ -84,7 +84,7 @@ async def clean_db(request):
         return
     engine = request.getfixturevalue("engine")
     async with engine.begin() as conn:
-        await conn.execute(text("TRUNCATE feedback, registrations, consents, users, fsm_state, deletion_log RESTART IDENTITY CASCADE"))
+        await conn.execute(text("TRUNCATE checker_invites, checkers, feedback, registrations, consents, users, fsm_state, deletion_log RESTART IDENTITY CASCADE"))
         await conn.execute(text("DELETE FROM events WHERE id <> 1"))
         from bot.db import seed_data as _seed
 
