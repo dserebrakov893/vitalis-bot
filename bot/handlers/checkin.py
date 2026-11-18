@@ -34,11 +34,14 @@ def _open_kb() -> InlineKeyboardMarkup | None:
     return InlineKeyboardMarkup(inline_keyboard=[[btn]]) if btn else None
 
 
-NO_URL = (
-    "Mini App чекина не настроен: не задан WEBAPP_URL.\n\n"
-    "В Railway: vitalis-bot → Settings → Networking → Generate Domain, затем в Variables "
-    "добавить WEBAPP_URL=https://<этот домен>."
-)
+def no_url_text() -> str:
+    raw = settings.webapp_url_raw
+    problem = f"WEBAPP_URL задан неправильно: «{escape(raw)}»." if raw else "Не задан WEBAPP_URL."
+    return (
+        f"Mini App чекина не настроен. {problem}\n\n"
+        "В Railway: vitalis-bot → Settings → Networking → скопируй домен (или нажми Generate Domain, порт 8080). "
+        "Затем в Variables: WEBAPP_URL=https://этот-домен, например https://vitalis-bot-production.up.railway.app"
+    )
 
 
 @router.message(Command("checkers"))
@@ -65,7 +68,7 @@ async def cmd_checkers(message: Message, sm: async_sessionmaker) -> None:
         "Сейчас с доступом: " + (", ".join(escape(n) for _, n in active) if active else "никого"),
     ]
     if not settings.webapp_url:
-        lines += ["", NO_URL]
+        lines += ["", no_url_text()]
     rows = []
     btn = open_button()
     if btn:
@@ -96,7 +99,7 @@ async def cmd_checkin(message: Message, sm: async_sessionmaker) -> None:
     if event is None:
         return  # не проверяющий: команда для него не существует
     if not settings.webapp_url:
-        await message.answer(NO_URL)
+        await message.answer(no_url_text())
         return
     came, total = await checkin.counts(sm, event.id)
     await message.answer(f"<b>Чекин: {escape(event.title)}</b>\n\nПришло {came} из {total}.", reply_markup=_open_kb())

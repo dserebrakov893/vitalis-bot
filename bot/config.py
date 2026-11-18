@@ -17,6 +17,18 @@ def _bool(value: str | None, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _https_url(value: str | None) -> str:
+    """https://хост[/путь] без завершающего слеша. Битое значение (например, «https://» от пустой
+    ссылки ${{RAILWAY_PUBLIC_DOMAIN}}) считаем незаданным: бот подскажет, что поправить."""
+    from urllib.parse import urlsplit
+
+    value = (value or "").strip().rstrip("/")
+    parts = urlsplit(value)
+    if parts.scheme != "https" or not parts.hostname or "." not in parts.hostname:
+        return ""
+    return value
+
+
 def _ids(value: str | None) -> frozenset[int]:
     if not value:
         return frozenset()
@@ -42,6 +54,7 @@ class Settings:
     support_username: str = "meine_nika"
     support_chat_id: int | None = None
     webapp_url: str = ""  # публичный https-адрес сервиса, на нём открывается Mini App чекина
+    webapp_url_raw: str = ""  # как задано в env: чтобы показать ошибку, если адрес битый
     port: int | None = None  # порт веб-сервера; без него Mini App не запускается
 
     @classmethod
@@ -65,7 +78,8 @@ class Settings:
             # Куда падают вопросы из «Поддержки». Аккаунт должен хотя бы раз нажать /start в боте.
             support_username=(e("SUPPORT_USERNAME") or "meine_nika").lstrip("@"),
             support_chat_id=int(e("SUPPORT_CHAT_ID")) if (e("SUPPORT_CHAT_ID") or "").strip() else None,
-            webapp_url=(e("WEBAPP_URL") or "").strip().rstrip("/"),
+            webapp_url=_https_url(e("WEBAPP_URL")),
+            webapp_url_raw=(e("WEBAPP_URL") or "").strip(),
             port=int(e("PORT")) if (e("PORT") or "").strip() else None,
         )
 

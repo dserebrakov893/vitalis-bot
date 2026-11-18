@@ -177,3 +177,22 @@ async def test_checkin_command_only_for_staff(cenv, sessionmaker):
     await _invite_checker(session, send)
     await send(text_update(CHECKER, "/checkin"))
     assert "Чекин: Встреча с Семёном Покацким" in session.last_text() or "WEBAPP_URL" in session.last_text()
+
+
+def test_webapp_url_validation():
+    from bot.config import _https_url
+
+    assert _https_url("https://vitalis-bot-production.up.railway.app/") == "https://vitalis-bot-production.up.railway.app"
+    for bad in ("https://", "https:/", "", "http://example.com", "vitalis.up.railway.app", "https://localhost"):
+        assert _https_url(bad) == ""
+
+
+async def test_checkin_explains_bad_url(cenv, monkeypatch):
+    from dataclasses import replace
+
+    from bot.handlers import checkin as chk
+
+    session, send, _, _ = cenv
+    monkeypatch.setattr(chk, "settings", replace(chk.settings, webapp_url="", webapp_url_raw="https://"))
+    await send(text_update(ADMIN, "/checkin"))
+    assert "WEBAPP_URL задан неправильно: «https://»" in session.last_text()
