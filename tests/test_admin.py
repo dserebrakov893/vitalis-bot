@@ -1,12 +1,13 @@
 """Админка: доступ, /stats, /export (Excel), /list, /link, /broadcast, /event_set."""
 import csv
 import io
+import re
 
 import pytest_asyncio
 from sqlalchemy import select
 
 from bot import texts as t
-from bot.db.models import Event
+from bot.db.models import Event, User
 from bot.handlers import admin
 from bot.services import admin as adm
 from bot.services import registration as reg
@@ -97,11 +98,36 @@ async def test_guard_list_sorted(aenv, sessionmaker):
     await _populate(sessionmaker)
     await send(text_update(ADMIN, "/list"))
     out = session.last_text()
-    body = out.split("\n")[1:]
-    assert out.startswith("Встреча с Семёном Покацким") and "Всего: 4" in out
-    order = [line.split(". ", 1)[1].split(" — ")[0] for line in body]
+    assert out.startswith("<b>Встреча с Семёном Покацким</b>") and "Всего: 4" in out
+    order = re.findall(r"\n\d+\. <b>(.+?)</b>", out)
     assert order == ["=HYPERLINK(1) Злой", "Елисеев Егор", "Ёлкина Анна", "Яковлев Ян"]
     assert "Борисов" not in out  # отменённых нет
+    assert "Сеченовский, Студент" in out and "Билет №" in out
+    assert '<a href="tg://user?id=' in out  # ника нет: ссылка на профиль по ID
+    assert "+7999" not in out  # телефона в списке нет
+
+
+async def test_list_shows_username(aenv, sessionmaker):
+    session, send = aenv
+    await _populate(sessionmaker)
+    async with sessionmaker() as s, s.begin():
+        (await s.get(User, 2)).username = "anna_el"
+    await send(text_update(ADMIN, "/list"))
+    assert "<b>Ёлкина Анна</b>\n@anna_el\nСеченовский, Студент\nБилет №2" in session.last_text()
+
+
+async def test_list_viewers_get_only_list(aenv, sessionmaker):
+    session, send = aenv
+    await _populate(sessionmaker)
+    viewer = 732556157
+    assert viewer in admin.LIST_VIEWER_IDS and 470770659 in admin.LIST_VIEWER_IDS
+    await send(text_update(viewer, "/list"))
+    assert "Всего: 4" in session.last_text()
+    before = len(session.texts())
+    for cmd in ("/stats", "/export", "/broadcast", "/event", "/checkers"):
+        await send(text_update(viewer, cmd))
+    assert not any("Зарегистрировано" in x or "Чекин" in x for x in session.texts()[before:])
+    assert session.names().count("SendDocument") == 0
 
 
 def test_chunking_long_list():

@@ -147,26 +147,43 @@ async def export_csv(sm: async_sessionmaker, event_id: int | None = None, all_ev
     return buf.getvalue().encode("utf-8-sig"), f"{name}_{datetime.now(MSK):%Y%m%d_%H%M}.csv"
 
 
+def tg_account(user_id: int, username: str | None) -> str:
+    """@ник, а если ника нет — ссылка на профиль по ID (откроется, если человек не закрыл её в настройках)."""
+    from html import escape
+
+    if username:
+        return "@" + escape(username)
+    return f'<a href="tg://user?id={user_id}">без ника, id {user_id}</a>'
+
+
 async def guard_list(sm: async_sessionmaker, event_id: int | None = None) -> tuple[str, list[str]]:
-    """Список для охраны: ФИО по алфавиту + номер билета, только registered."""
+    """Список участников: ФИО по алфавиту, Telegram, откуда (вуз и статус), номер билета. Только registered."""
+    from html import escape
+
     async with sm() as s:
         ev = await admin_event(s, event_id)
         if ev is None:
             return "", []
         rows = (
             await s.execute(
-                select(User.full_name, Registration.ticket_no, Registration.checked_in_at)
+                select(User.full_name, User.id, User.username, User.university, User.status,
+                       Registration.ticket_no, Registration.checked_in_at)
                 .join(User)
                 .where(Registration.event_id == ev.id, Registration.state == "registered")
             )
         ).all()
-    rows = sorted(rows, key=lambda r: ((r[0] or "").replace("ё", "е").replace("Ё", "Е").lower(), r[1]))
-    from html import escape
-
-    came = sum(1 for r in rows if r[2])
-    header = f"{escape(ev.title)}, {ev.starts_at.astimezone(MSK):%d.%m.%Y %H:%M} МСК. Всего: {len(rows)}, пришли: {came}"
-    return header, [f"{i}. {escape(name or '')} — билет №{no}" + (" ✓" if at else "")
-                    for i, (name, no, at) in enumerate(rows, 1)]
+    rows = sorted(rows, key=lambda r: ((r[0] or "").replace("ё", "е").replace("Ё", "Е").lower(), r[5]))
+    came = sum(1 for r in rows if r[6])
+    header = (f"<b>{escape(ev.title)}</b>, {ev.starts_at.astimezone(MSK):%d.%m.%Y %H:%M} МСК\n"
+              f"Всего: {len(rows)}, пришли: {came}\n")
+    lines = []
+    for i, (name, uid, username, university, status, no, at) in enumerate(rows, 1):
+        origin = ", ".join(x for x in (university, STATUS_LABELS.get(status or "", status)) if x) or "—"
+        lines.append(
+            f"\n{i}. <b>{escape(name or '')}</b>" + (" ✓" if at else "")
+            + f"\n{tg_account(uid, username)}\n{escape(origin)}\nБилет №{no}"
+        )
+    return header, lines
 
 
 def chunk_lines(header: str, lines: list[str], limit: int = 3800) -> list[str]:

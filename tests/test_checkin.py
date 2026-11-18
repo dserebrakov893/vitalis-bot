@@ -167,7 +167,7 @@ async def test_search_mark_unmark_and_stats(cenv, sessionmaker):
     await send(text_update(ADMIN, "/stats"))
     assert "Пришло: 1 из 3" in session.last_text()
     await send(text_update(ADMIN, "/list"))
-    assert "Ёлкина Анна — билет №2 ✓" in session.last_text() and "пришли: 1" in session.last_text()
+    assert "<b>Ёлкина Анна</b> ✓" in session.last_text() and "пришли: 1" in session.last_text()
 
 
 async def test_checkin_command_only_for_staff(cenv, sessionmaker):

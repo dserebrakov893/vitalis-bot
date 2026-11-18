@@ -30,6 +30,7 @@ def build_dispatcher(sm: async_sessionmaker, delivery: Delivery, extra_routers=(
     dp.include_router(start.router)
     dp.include_router(form.router)
     dp.include_router(checkin.router)
+    dp.include_router(admin.list_router)
     dp.include_router(admin.router)
     dp.include_router(feedback.router)
     dp.include_router(user_commands.router)  # последним: в нём «ловушка» для прочих сообщений

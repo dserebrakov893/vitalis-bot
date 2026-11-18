@@ -37,6 +37,19 @@ class IsAdmin(Filter):
 router.message.filter(IsAdmin())
 router.callback_query.filter(IsAdmin())
 
+# Кому доступен только /list (без остальной админки): LIST_VIEWER_IDS
+LIST_VIEWER_IDS: set[int] = set(settings.list_viewer_ids)
+
+
+class CanList(Filter):
+    async def __call__(self, event) -> bool:
+        user = getattr(event, "from_user", None)
+        return user is not None and (user.id in ADMIN_IDS or user.id in LIST_VIEWER_IDS)
+
+
+list_router = Router(name="admin_list")
+list_router.message.filter(CanList())
+
 
 def _event_arg(command: CommandObject) -> int | None:
     arg = (command.args or "").strip()
@@ -59,14 +72,15 @@ async def cmd_export(message: Message, command: CommandObject, sm: async_session
     await message.answer_document(BufferedInputFile(data, filename=name), caption="CSV: UTF-8, разделитель «;»")
 
 
-@router.message(Command("list"))
+@list_router.message(Command("list"))
 async def cmd_list(message: Message, command: CommandObject, sm: async_sessionmaker) -> None:
     header, lines = await adm.guard_list(sm, _event_arg(command))
     if not header:
         await message.answer("Встреч нет.")
         return
+    log.info("list by %s", message.from_user.id)
     for chunk in adm.chunk_lines(header, lines):
-        await message.answer(chunk)
+        await message.answer(chunk.strip(), disable_web_page_preview=True)
 
 
 @router.message(Command("link"))

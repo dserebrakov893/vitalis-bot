@@ -55,6 +55,8 @@ class Settings:
     support_chat_id: int | None = None
     webapp_url: str = ""  # публичный https-адрес сервиса, на нём открывается Mini App чекина
     webapp_url_raw: str = ""  # как задано в env: чтобы показать ошибку, если адрес битый
+    # Кто, кроме ADMIN_IDS, может смотреть /list (и только его)
+    list_viewer_ids: frozenset[int] = frozenset({732556157, 470770659})
     port: int | None = None  # порт веб-сервера; без него Mini App не запускается
 
     @classmethod
@@ -80,6 +82,8 @@ class Settings:
             support_chat_id=int(e("SUPPORT_CHAT_ID")) if (e("SUPPORT_CHAT_ID") or "").strip() else None,
             webapp_url=_https_url(e("WEBAPP_URL")),
             webapp_url_raw=(e("WEBAPP_URL") or "").strip(),
+            list_viewer_ids=_ids(e("LIST_VIEWER_IDS")) if (e("LIST_VIEWER_IDS") or "").strip()
+            else frozenset({732556157, 470770659}),
             port=int(e("PORT")) if (e("PORT") or "").strip() else None,
         )
 
