@@ -91,7 +91,7 @@ async def clean_db(request):
         await conn.execute(
             text(
                 "UPDATE events SET seats=60, registration_limit=75, is_open=true, shared_widget_id=NULL, "
-                "starts_at='2026-11-19 14:00+00', ends_at='2026-11-19 17:00+00', title=:title, speaker=:speaker, venue_text=:venue, venue_url=:url WHERE id=1"
+                "starts_at='2037-11-19 14:00+00', ends_at='2037-11-19 17:00+00', title=:title, speaker=:speaker, venue_text=:venue, venue_url=:url WHERE id=1"
             ),
             {"title": _seed.TITLE, "speaker": _seed.SPEAKER, "venue": _seed.VENUE_TEXT, "url": _seed.VENUE_URL},
         )

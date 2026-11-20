@@ -250,7 +250,7 @@ async def cmd_feedback(message: Message, command: CommandObject, sm: async_sessi
     log.info("feedback export by admin %s", message.from_user.id)
     await message.answer_document(
         BufferedInputFile(data, filename=name),
-        caption="Отзывы: о встречах и о клубе. CSV для Excel, разделитель «;». /feedback <id встречи> — только одна встреча.",
+        caption="Отзывы: о встречах и о клубе. CSV для Excel, разделитель «;». /feedback &lt;id встречи&gt; — только одна встреча.",
     )
 
 

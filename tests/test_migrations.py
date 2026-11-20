@@ -22,7 +22,8 @@ async def test_migrations_match_models(engine):
 async def test_seed_first_event(sessionmaker):
     async with sessionmaker() as s:
         ev = (await s.execute(select(Event).where(Event.id == 1))).scalar_one()
-    assert ev.starts_at == datetime(2026, 11, 19, 14, 0, tzinfo=timezone.utc)
+    # год фикстура сдвигает в будущее, чтобы тесты не зависели от сегодняшней даты
+    assert (ev.starts_at.month, ev.starts_at.day, ev.starts_at.hour) == (11, 19, 14) and ev.starts_at.utcoffset() == timezone.utc.utcoffset(None)
     assert ev.seats == 60 and ev.registration_limit == 75 and ev.is_open
     assert "Зубовский бульвар, д. 37, стр. 1" in ev.venue_text
     assert ev.venue_url.startswith("https://yandex.ru/maps/")

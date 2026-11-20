@@ -9,7 +9,7 @@ from bot.services import registration as reg
 from tests.factories import add_users, profile
 
 BEFORE = datetime(2026, 11, 16, 9, 0, tzinfo=timezone.utc)
-AFTER_START = datetime(2026, 11, 19, 14, 0, tzinfo=timezone.utc)
+AFTER_START = datetime(2037, 11, 19, 14, 0, tzinfo=timezone.utc)
 
 
 async def _states(sm):

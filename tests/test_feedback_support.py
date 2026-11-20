@@ -165,6 +165,10 @@ async def test_admin_feedback_export_and_stats(fenv, sessionmaker):
 
     await send(text_update(ADMIN, "/feedback"))
     doc = session.params("SendDocument")[-1]["document"]
+    # подпись уходит с parse_mode=HTML: «<…>» без экранирования Telegram не примет
+    import re as _re
+    caption = session.params("SendDocument")[-1]["caption"]
+    assert not _re.search(r"<(?!/?(b|i|u|s|a|code|pre|blockquote)\b)", caption)
     rows = list(csv.reader(io.StringIO(doc.data.decode("utf-8-sig")), delimiter=";"))
     assert rows[0][:6] == ["kind", "event_id", "event_title", "full_name", "username", "telegram_id"]
     event_row, club_row = rows[1], rows[2]
@@ -267,5 +271,5 @@ async def test_event_set_ends_at(fenv, sessionmaker):
     await send(text_update(ADMIN, "/event_set ends_at 20:30"))
     async with sessionmaker() as s:
         ev = await s.get(Event, 1)
-    assert ev.ends_at == datetime(2026, 11, 19, 20, 30, tzinfo=MSK)
+    assert ev.ends_at == datetime(2037, 11, 19, 20, 30, tzinfo=MSK)
     assert "опрос после встречи: 19.11 21:00" in session.last_text()
